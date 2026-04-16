@@ -10,6 +10,9 @@ const defaultConfig = {
   featuredEntries: [],
   bannerIntervalSeconds: 8,
   bannerVideoMuted: true,
+  fullscreenSlideshowEnabled: false,
+  fullscreenSlideshowIntervalSeconds: 6,
+  fullscreenVideoAdvanceOnEnded: true,
   collectionsSort: 'id_asc',
 }
 
@@ -322,6 +325,24 @@ export async function updateAppConfig(updates) {
 
   if (typeof updates.bannerVideoMuted === 'boolean') {
     nextConfig.bannerVideoMuted = updates.bannerVideoMuted
+  }
+
+  if (typeof updates.fullscreenSlideshowEnabled === 'boolean') {
+    nextConfig.fullscreenSlideshowEnabled = updates.fullscreenSlideshowEnabled
+  }
+
+  if (
+    typeof updates.fullscreenSlideshowIntervalSeconds === 'number' &&
+    Number.isFinite(updates.fullscreenSlideshowIntervalSeconds)
+  ) {
+    nextConfig.fullscreenSlideshowIntervalSeconds = Math.max(
+      2,
+      Math.round(updates.fullscreenSlideshowIntervalSeconds),
+    )
+  }
+
+  if (typeof updates.fullscreenVideoAdvanceOnEnded === 'boolean') {
+    nextConfig.fullscreenVideoAdvanceOnEnded = updates.fullscreenVideoAdvanceOnEnded
   }
 
   await writeConfig(nextConfig)

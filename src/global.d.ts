@@ -20,6 +20,9 @@ declare global {
         }>
         bannerIntervalSeconds?: number
         bannerVideoMuted?: boolean
+        fullscreenSlideshowEnabled?: boolean
+        fullscreenSlideshowIntervalSeconds?: number
+        fullscreenVideoAdvanceOnEnded?: boolean
       }) => Promise<GalleryState>
       updateCollection: (
         collectionId: string,

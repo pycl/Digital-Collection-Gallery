@@ -33,6 +33,9 @@ export type AppConfig = {
   featuredEntries: FeaturedEntry[]
   bannerIntervalSeconds: number
   bannerVideoMuted: boolean
+  fullscreenSlideshowEnabled: boolean
+  fullscreenSlideshowIntervalSeconds: number
+  fullscreenVideoAdvanceOnEnded: boolean
   collectionsSort: 'id_asc' | 'id_desc'
 }
 

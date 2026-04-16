@@ -5,6 +5,7 @@
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type WheelEvent as ReactWheelEvent,
@@ -19,6 +20,9 @@ const emptyState: GalleryState = {
     featuredEntries: [],
     bannerIntervalSeconds: 8,
     bannerVideoMuted: true,
+    fullscreenSlideshowEnabled: false,
+    fullscreenSlideshowIntervalSeconds: 6,
+    fullscreenVideoAdvanceOnEnded: true,
     collectionsSort: 'id_asc',
   },
   collections: [],
@@ -37,6 +41,9 @@ type GalleryContextValue = {
     featuredEntries?: FeaturedEntry[]
     bannerIntervalSeconds?: number
     bannerVideoMuted?: boolean
+    fullscreenSlideshowEnabled?: boolean
+    fullscreenSlideshowIntervalSeconds?: number
+    fullscreenVideoAdvanceOnEnded?: boolean
   }) => Promise<void>
   updateCollection: (
     collectionId: string,
@@ -61,6 +68,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/hall" element={<HallPage />} />
+          <Route path="/hall-settings" element={<HallSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/collections/:collectionId" element={<CollectionDetailPage />} />
           <Route path="*" element={<Navigate replace to="/" />} />
@@ -126,6 +134,33 @@ function useGallery() {
     throw new Error('Gallery context is unavailable.')
   }
   return value
+}
+
+function usePageScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) {
+      return
+    }
+
+    const html = document.documentElement
+    const body = document.body
+    const previousHtmlOverflow = html.style.overflow
+    const previousBodyOverflow = body.style.overflow
+    const previousBodyTouchAction = body.style.touchAction
+    const previousBodyOverscrollBehavior = body.style.overscrollBehavior
+
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    body.style.touchAction = 'none'
+    body.style.overscrollBehavior = 'none'
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow
+      body.style.overflow = previousBodyOverflow
+      body.style.touchAction = previousBodyTouchAction
+      body.style.overscrollBehavior = previousBodyOverscrollBehavior
+    }
+  }, [locked])
 }
 
 type ResolvedFeaturedEntry = {
@@ -272,6 +307,35 @@ function FeaturedBannerMedia({
       />
     </>
   )
+}
+
+function HallMediaPreview({
+  asset,
+  assets,
+  alt,
+  active,
+}: {
+  asset: GalleryAsset | null
+  assets: GalleryAsset[]
+  alt: string
+  active: boolean
+}) {
+  if (!asset) {
+    return <div className="featuredPlaceholder">No art</div>
+  }
+
+  const assetUrl = toAssetUrl(asset.path)
+  const previewImageUrl = getPreviewImageUrl(asset, assets)
+
+  if (asset.type === 'video') {
+    if (active || !previewImageUrl) {
+      return <video autoPlay loop muted playsInline preload="metadata" src={assetUrl} />
+    }
+
+    return <img alt={alt} src={previewImageUrl} />
+  }
+
+  return <img alt={alt} src={assetUrl} />
 }
 
 function HomePage() {
@@ -713,7 +777,7 @@ function HallPage() {
           {featuredEntries.length === 0 ? (
             <div className="emptyState">
               <strong>No featured cards configured yet.</strong>
-              <p>Open Settings and add at least one featured entry to populate the hall.</p>
+              <p>Open Hall Settings and add at least one featured entry to populate the hall.</p>
             </div>
           ) : (
             <div
@@ -736,70 +800,79 @@ function HallPage() {
                 onClick={showPrevious}
               />
 
-              <div className="hallRing">
-                {featuredEntries.map((featured, index) => {
-                  const offset = getCircularOffset(index, resolvedActiveIndex, featuredEntries.length)
-                  const distance = Math.abs(offset)
-                  const visible = distance <= 3
-                  if (!visible) {
-                    return null
-                  }
+              <div className="hallStageOrbit">
+                <div className="hallOrbitTrack" aria-hidden="true" />
 
-                  const asset = featured.asset
-                  const assetUrl = asset ? toAssetUrl(asset.path) : null
-                  const previewImageUrl = asset ? getPreviewImageUrl(asset, featured.collection.assets) : null
-                  const showVideo = asset?.type === 'video' && offset === 0
-                  const canOpenFullscreen = Boolean(assetUrl)
+                <div className="hallRing">
+                  {featuredEntries.map((featured, index) => {
+                    const offset = getCircularOffset(index, resolvedActiveIndex, featuredEntries.length)
+                    const distance = Math.abs(offset)
+                    const visible = distance > 0 && distance <= 3
+                    if (!visible) {
+                      return null
+                    }
 
-                  return (
-                    <button
-                      className={`hallCard ${offset === 0 ? 'hallCardActive' : ''}`}
-                      key={featured.entry.id}
-                      style={
-                        {
-                          '--hall-offset': offset,
-                          '--hall-depth': `${Math.max(0, 260 - distance * 86)}px`,
-                          '--hall-opacity': `${Math.max(0.08, 1 - distance * 0.24)}`,
-                          '--hall-scale': `${Math.max(0.7, 1 - distance * 0.09)}`,
-                          '--hall-blur': `${Math.max(0, distance * 2.2)}px`,
-                          '--hall-z': `${40 - distance}`,
-                        } as CSSProperties
-                      }
-                      type="button"
-                      onClick={() => {
-                        if (offset === 0) {
-                          if (canOpenFullscreen) {
-                            setHallFullscreen(true)
-                          }
-                          return
+                    return (
+                      <button
+                        className="hallSideCard"
+                        key={featured.entry.id}
+                        style={
+                          {
+                            '--hall-offset': offset,
+                            '--hall-depth': `${Math.max(-160, 120 - distance * 90)}px`,
+                            '--hall-opacity': `${Math.max(0.14, 0.92 - distance * 0.22)}`,
+                            '--hall-scale': `${Math.max(0.58, 0.88 - distance * 0.12)}`,
+                            '--hall-blur': `${Math.max(0.8, distance * 2.4)}px`,
+                            '--hall-y': `${Math.min(72, distance * 22)}px`,
+                            '--hall-z': `${20 - distance}`,
+                          } as CSSProperties
                         }
+                        type="button"
+                        onClick={() => setActiveIndex(index)}
+                      >
+                        <div className="hallCardArtwork">
+                          <HallMediaPreview
+                            active={false}
+                            alt={featured.entry.title || featured.collection.displayName}
+                            asset={featured.asset}
+                            assets={featured.collection.assets}
+                          />
+                        </div>
+                        <div className="hallCardMeta">
+                          <span className="collectionId">CD.{featured.collection.id}</span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
 
-                        setActiveIndex(index)
-                      }}
-                    >
-                      <div className="hallCardArtwork">
-                        {assetUrl ? (
-                          showVideo ? (
-                            <video autoPlay loop muted playsInline preload="metadata" src={assetUrl} />
-                          ) : previewImageUrl ? (
-                            <img alt={featured.entry.title || featured.collection.displayName} src={previewImageUrl} />
-                          ) : asset?.type === 'image' ? (
-                            <img alt={featured.entry.title || featured.collection.displayName} src={assetUrl} />
-                          ) : (
-                            <video autoPlay loop muted playsInline preload="metadata" src={assetUrl} />
-                          )
-                        ) : (
-                          <div className="featuredPlaceholder">No art</div>
-                        )}
+                {activeEntry ? (
+                  <button
+                    className="hallHeroCard"
+                    type="button"
+                    onClick={() => {
+                      if (activeEntry.asset) {
+                        setHallFullscreen(true)
+                      }
+                    }}
+                  >
+                    <div className="hallHeroFrame">
+                      <div className="hallCardArtwork hallHeroArtwork">
+                        <HallMediaPreview
+                          active
+                          alt={activeTitle}
+                          asset={activeEntry.asset}
+                          assets={activeEntry.collection.assets}
+                        />
                       </div>
-                      <div className="hallCardMeta">
-                        <span className="collectionId">CD.{featured.collection.id}</span>
-                        <strong>{featured.entry.title || featured.collection.displayName}</strong>
-                        <span>{featured.entry.subtitle || `Collection ${featured.collection.id}`}</span>
-                      </div>
-                    </button>
-                  )
-                })}
+                    </div>
+                    <div className="hallHeroMeta">
+                      <span className="collectionId">CD.{activeEntry.collection.id}</span>
+                      <strong>{activeTitle}</strong>
+                      <span>{activeSubtitle}</span>
+                    </div>
+                  </button>
+                ) : null}
               </div>
 
               <button
@@ -838,7 +911,7 @@ function HallPage() {
                 >
                   Expand Media
                 </button>
-                <button className="ghostButton" type="button" onClick={() => navigate('/settings')}>
+                <button className="ghostButton" type="button" onClick={() => navigate('/hall-settings')}>
                   Edit Entries
                 </button>
               </div>
@@ -846,7 +919,7 @@ function HallPage() {
           ) : (
             <div className="emptyState">
               <strong>No hall entries yet.</strong>
-              <p>Go to Settings and start composing featured cards.</p>
+              <p>Go to Hall Settings and start composing featured cards.</p>
             </div>
           )}
         </section>
@@ -889,13 +962,38 @@ function SettingsPage() {
       {error ? <div className="statusBanner error">Error: {error}</div> : null}
 
       <main className="detailLayout">
-        <BannerSettingsSection
+        <ViewerSettingsSection
           bridgeReady={bridgeReady}
           busy={busy}
-          collections={galleryState.collections}
           config={galleryState.config}
           onSave={updateConfig}
         />
+
+        <section className="gridPanel settingsPanel">
+          <div className="panelHeader">
+            <div>
+              <p className="sectionTag">Hall Settings</p>
+              <h2>Featured hall cards are managed separately now</h2>
+            </div>
+          </div>
+
+          <article className="settingsCard settingsCardWide hallSettingsShortcutCard">
+            <div className="settingsBody">
+              <p className="subtitle">
+                The featured hall card builder controls what appears in the exhibition view. Open the
+                dedicated settings page to edit entries, media, rotation timing, and preview each card.
+              </p>
+              <div className="settingsActions">
+                <button className="primaryButton" type="button" onClick={() => navigate('/hall-settings')}>
+                  Open Hall Settings
+                </button>
+                <button className="ghostButton" type="button" onClick={() => navigate('/hall')}>
+                  Preview Hall
+                </button>
+              </div>
+            </div>
+          </article>
+        </section>
 
         <section className="gridPanel settingsPanel">
           <div className="panelHeader">
@@ -933,6 +1031,174 @@ function SettingsPage() {
   )
 }
 
+function ViewerSettingsSection({
+  config,
+  busy,
+  bridgeReady,
+  onSave,
+}: {
+  config: GalleryState['config']
+  busy: boolean
+  bridgeReady: boolean
+  onSave: (updates: {
+    fullscreenSlideshowEnabled?: boolean
+    fullscreenSlideshowIntervalSeconds?: number
+    fullscreenVideoAdvanceOnEnded?: boolean
+  }) => Promise<void>
+}) {
+  const [fullscreenSlideshowEnabled, setFullscreenSlideshowEnabled] = useState(config.fullscreenSlideshowEnabled)
+  const [fullscreenSlideshowIntervalSeconds, setFullscreenSlideshowIntervalSeconds] = useState(
+    String(config.fullscreenSlideshowIntervalSeconds),
+  )
+  const [fullscreenVideoAdvanceOnEnded, setFullscreenVideoAdvanceOnEnded] = useState(
+    config.fullscreenVideoAdvanceOnEnded,
+  )
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
+    setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
+    setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
+  }, [
+    config.fullscreenSlideshowEnabled,
+    config.fullscreenSlideshowIntervalSeconds,
+    config.fullscreenVideoAdvanceOnEnded,
+  ])
+
+  const normalizedInterval = Number(fullscreenSlideshowIntervalSeconds)
+  const isDirty =
+    fullscreenSlideshowEnabled !== config.fullscreenSlideshowEnabled ||
+    normalizedInterval !== config.fullscreenSlideshowIntervalSeconds ||
+    fullscreenVideoAdvanceOnEnded !== config.fullscreenVideoAdvanceOnEnded
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await onSave({
+        fullscreenSlideshowEnabled,
+        fullscreenSlideshowIntervalSeconds: Number.isFinite(normalizedInterval)
+          ? normalizedInterval
+          : config.fullscreenSlideshowIntervalSeconds,
+        fullscreenVideoAdvanceOnEnded,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="gridPanel settingsPanel">
+      <div className="panelHeader">
+        <div>
+          <p className="sectionTag">Viewer Settings</p>
+          <h2>Fullscreen Viewer Behavior</h2>
+        </div>
+      </div>
+
+      <article className="settingsCard settingsCardWide">
+        <div className="settingsBody">
+          <label className="settingsToggle">
+            <input
+              checked={fullscreenSlideshowEnabled}
+              type="checkbox"
+              onChange={(event) => setFullscreenSlideshowEnabled(event.target.checked)}
+            />
+            <span>Enable fullscreen slideshow</span>
+          </label>
+
+          <label className="settingsField">
+            <span>Slideshow Interval Seconds</span>
+            <input
+              className="settingsInput"
+              disabled={!fullscreenSlideshowEnabled}
+              min="2"
+              step="1"
+              type="number"
+              value={fullscreenSlideshowIntervalSeconds}
+              onChange={(event) => setFullscreenSlideshowIntervalSeconds(event.target.value)}
+            />
+          </label>
+
+          <label className="settingsToggle">
+            <input
+              checked={fullscreenVideoAdvanceOnEnded}
+              disabled={!fullscreenSlideshowEnabled}
+              type="checkbox"
+              onChange={(event) => setFullscreenVideoAdvanceOnEnded(event.target.checked)}
+            />
+            <span>When fullscreen media is a video, continue on video end instead of waiting for the timer</span>
+          </label>
+
+          <p className="settingsHint">
+            This affects fullscreen collection viewing. Images advance by timer when slideshow is enabled. Videos can
+            either wait for the same timer or move to the next asset as soon as playback finishes.
+          </p>
+
+          <div className="settingsActions">
+            <button
+              className="primaryButton"
+              disabled={!bridgeReady || busy || saving || !isDirty}
+              type="button"
+              onClick={() => void handleSave()}
+            >
+              {saving ? 'Saving...' : 'Save Viewer Settings'}
+            </button>
+            <button
+              className="ghostButton"
+              disabled={saving || !isDirty}
+              type="button"
+              onClick={() => {
+                setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
+                setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
+                setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      </article>
+    </section>
+  )
+}
+
+function HallSettingsPage() {
+  const { galleryState, busy, error, bridgeReady, updateConfig } = useGallery()
+  const navigate = useNavigate()
+
+  return (
+    <div className="shell">
+      <header className="detailTopbar">
+        <div className="detailTitleBlock">
+          <button className="ghostButton" type="button" onClick={() => navigate('/settings')}>
+            Back
+          </button>
+          <div className="viewerInfoCard">
+            <p className="eyebrow">Hall Settings</p>
+            <h1>Featured Hall Builder</h1>
+            <p className="subtitle">
+              Configure the curated cards shown in the exhibition hall. Each entry can target any
+              collection and any media item, with its own title, subtitle, and preview.
+            </p>
+          </div>
+        </div>
+      </header>
+
+      {error ? <div className="statusBanner error">Error: {error}</div> : null}
+
+      <main className="detailLayout">
+        <BannerSettingsSection
+          bridgeReady={bridgeReady}
+          busy={busy}
+          collections={galleryState.collections}
+          config={galleryState.config}
+          onSave={updateConfig}
+        />
+      </main>
+    </div>
+  )
+}
+
 function BannerSettingsSection({
   config,
   busy,
@@ -953,15 +1219,21 @@ function BannerSettingsSection({
   const [featuredEntries, setFeaturedEntries] = useState(config.featuredEntries)
   const [bannerIntervalSeconds, setBannerIntervalSeconds] = useState(String(config.bannerIntervalSeconds))
   const [bannerVideoMuted, setBannerVideoMuted] = useState(config.bannerVideoMuted)
+  const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null)
+  const [dragOverEntryId, setDragOverEntryId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setFeaturedEntries(config.featuredEntries)
     setBannerIntervalSeconds(String(config.bannerIntervalSeconds))
     setBannerVideoMuted(config.bannerVideoMuted)
+    setDraggedEntryId(null)
+    setDragOverEntryId(null)
   }, [config.bannerIntervalSeconds, config.bannerVideoMuted, config.featuredEntries])
 
   const normalizedInterval = Number(bannerIntervalSeconds)
+  const representedCollectionIds = new Set(featuredEntries.map((entry) => entry.collectionId))
+  const missingCollections = collections.filter((collection) => !representedCollectionIds.has(collection.id))
   const isDirty =
     JSON.stringify(featuredEntries) !== JSON.stringify(config.featuredEntries) ||
     normalizedInterval !== config.bannerIntervalSeconds ||
@@ -979,6 +1251,149 @@ function BannerSettingsSection({
       ...currentEntries,
       createFeaturedEntry(collection?.id ?? '000000', currentEntries.length),
     ])
+  }
+
+  function addMissingCollections() {
+    if (missingCollections.length === 0) {
+      return
+    }
+
+    setFeaturedEntries((currentEntries) => [
+      ...currentEntries,
+      ...missingCollections.map((collection, index) => createFeaturedEntry(collection.id, currentEntries.length + index)),
+    ])
+  }
+
+  function removeEntry(entryId: string) {
+    setFeaturedEntries((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId))
+  }
+
+  function duplicateEntry(entryId: string) {
+    setFeaturedEntries((currentEntries) => {
+      const index = currentEntries.findIndex((entry) => entry.id === entryId)
+      if (index === -1) {
+        return currentEntries
+      }
+
+      const sourceEntry = currentEntries[index]
+      const duplicatedEntry: FeaturedEntry = {
+        ...sourceEntry,
+        id: `${sourceEntry.collectionId}-${Date.now()}-${index}`,
+      }
+
+      return [
+        ...currentEntries.slice(0, index + 1),
+        duplicatedEntry,
+        ...currentEntries.slice(index + 1),
+      ]
+    })
+  }
+
+  function moveEntry(entryId: string, direction: 'up' | 'down') {
+    setFeaturedEntries((currentEntries) => {
+      const index = currentEntries.findIndex((entry) => entry.id === entryId)
+      if (index === -1) {
+        return currentEntries
+      }
+
+      const nextIndex = direction === 'up' ? index - 1 : index + 1
+      if (nextIndex < 0 || nextIndex >= currentEntries.length) {
+        return currentEntries
+      }
+
+      const nextEntries = [...currentEntries]
+      const [movedEntry] = nextEntries.splice(index, 1)
+      nextEntries.splice(nextIndex, 0, movedEntry)
+      return nextEntries
+    })
+  }
+
+  function cycleEntryAsset(
+    entryId: string,
+    availableAssets: GalleryAsset[],
+    resolvedPreviewAsset: GalleryAsset | null,
+    direction: 'previous' | 'next',
+  ) {
+    if (availableAssets.length === 0) {
+      return
+    }
+
+    setFeaturedEntries((currentEntries) =>
+      currentEntries.map((entry) => {
+        if (entry.id !== entryId) {
+          return entry
+        }
+
+        const currentIndex =
+          entry.assetPath !== null
+            ? availableAssets.findIndex((asset) => asset.path === entry.assetPath)
+            : resolvedPreviewAsset
+              ? availableAssets.findIndex((asset) => asset.path === resolvedPreviewAsset.path)
+              : -1
+
+        const fallbackIndex = currentIndex === -1 ? 0 : currentIndex
+        const nextIndex =
+          direction === 'next'
+            ? (fallbackIndex + 1) % availableAssets.length
+            : (fallbackIndex - 1 + availableAssets.length) % availableAssets.length
+
+        return {
+          ...entry,
+          assetPath: availableAssets[nextIndex]?.path ?? entry.assetPath,
+        }
+      }),
+    )
+  }
+
+  function reorderEntries(sourceEntryId: string, targetEntryId: string) {
+    if (sourceEntryId === targetEntryId) {
+      return
+    }
+
+    setFeaturedEntries((currentEntries) => {
+      const sourceIndex = currentEntries.findIndex((entry) => entry.id === sourceEntryId)
+      const targetIndex = currentEntries.findIndex((entry) => entry.id === targetEntryId)
+      if (sourceIndex === -1 || targetIndex === -1) {
+        return currentEntries
+      }
+
+      const nextEntries = [...currentEntries]
+      const [movedEntry] = nextEntries.splice(sourceIndex, 1)
+      nextEntries.splice(targetIndex, 0, movedEntry)
+      return nextEntries
+    })
+  }
+
+  function handleEntryDragStart(event: ReactDragEvent<HTMLElement>, entryId: string) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', entryId)
+    setDraggedEntryId(entryId)
+    setDragOverEntryId(entryId)
+  }
+
+  function handleEntryDragOver(event: ReactDragEvent<HTMLElement>, entryId: string) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragOverEntryId !== entryId) {
+      setDragOverEntryId(entryId)
+    }
+  }
+
+  function handleEntryDrop(event: ReactDragEvent<HTMLElement>, targetEntryId: string) {
+    event.preventDefault()
+    const sourceEntryId = draggedEntryId ?? event.dataTransfer.getData('text/plain')
+    if (!sourceEntryId) {
+      return
+    }
+
+    reorderEntries(sourceEntryId, targetEntryId)
+    setDraggedEntryId(null)
+    setDragOverEntryId(null)
+  }
+
+  function handleEntryDragEnd() {
+    setDraggedEntryId(null)
+    setDragOverEntryId(null)
   }
 
   async function handleSave() {
@@ -1001,14 +1416,29 @@ function BannerSettingsSection({
           <p className="sectionTag">Featured Hall</p>
           <h2>Featured Entry Builder</h2>
         </div>
-        <button className="ghostButton" type="button" onClick={addEntry}>
-          Add Entry
-        </button>
+        <div className="featuredEntryPanelActions">
+          <button
+            className="ghostButton"
+            disabled={missingCollections.length === 0}
+            type="button"
+            onClick={addMissingCollections}
+          >
+            Add Missing Collections
+          </button>
+          <button className="ghostButton" type="button" onClick={addEntry}>
+            Add Entry
+          </button>
+        </div>
       </div>
 
       <div className="settingsList">
         <article className="settingsCard settingsCardWide">
           <div className="settingsBody">
+            <div className="featuredEntrySummary">
+              <span className="pill">{featuredEntries.length} hall card(s)</span>
+              <span className="pill">{missingCollections.length} collection(s) not yet in hall</span>
+            </div>
+
             {featuredEntries.length === 0 ? (
               <div className="emptyState">
                 <strong>No featured entries configured.</strong>
@@ -1019,111 +1449,224 @@ function BannerSettingsSection({
                 {featuredEntries.map((entry, index) => {
                   const collection = collections.find((candidate) => candidate.id === entry.collectionId) ?? null
                   const availableAssets = collection?.assets ?? []
+                  const previewAsset = collection ? getCollectionFeaturedAsset(collection, entry.assetPath) : null
+                  const previewUrl = previewAsset ? toAssetUrl(previewAsset.path) : null
+                  const previewImageUrl =
+                    previewAsset && collection ? getPreviewImageUrl(previewAsset, collection.assets) : null
+                  const entryTitle = entry.title.trim() || collection?.displayName || `Featured Card ${index + 1}`
+                  const entrySubtitle = entry.subtitle.trim() || `Collection ${collection?.id ?? '000000'}`
+                  const isDragSource = draggedEntryId === entry.id
+                  const isDropTarget = dragOverEntryId === entry.id && draggedEntryId !== entry.id
 
                   return (
-                    <article className="featuredEntryCard" key={entry.id}>
-                      <div className="featuredEntryHeader">
-                        <strong>Featured Card {index + 1}</strong>
-                        <button
-                          className="inlineButton"
-                          type="button"
-                          onClick={() =>
-                            setFeaturedEntries((currentEntries) =>
-                              currentEntries.filter((currentEntry) => currentEntry.id !== entry.id),
-                            )
+                    <article
+                      className={`featuredEntryCard ${isDragSource ? 'featuredEntryCardDragging' : ''} ${isDropTarget ? 'featuredEntryCardDropTarget' : ''}`}
+                      key={entry.id}
+                      onDragOver={(event) => handleEntryDragOver(event, entry.id)}
+                      onDrop={(event) => handleEntryDrop(event, entry.id)}
+                    >
+                      <div
+                        className="featuredEntryPreview"
+                        role={availableAssets.length > 0 ? 'button' : undefined}
+                        tabIndex={availableAssets.length > 0 ? 0 : -1}
+                        onClick={() => cycleEntryAsset(entry.id, availableAssets, previewAsset, 'next')}
+                        onKeyDown={(event) => {
+                          if (availableAssets.length === 0) {
+                            return
                           }
-                        >
-                          Remove
-                        </button>
+
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            cycleEntryAsset(entry.id, availableAssets, previewAsset, 'next')
+                          }
+                        }}
+                      >
+                        {previewAsset && previewUrl ? (
+                          previewAsset.type === 'video' && !previewImageUrl ? (
+                            <video autoPlay loop muted playsInline preload="metadata" src={previewUrl} />
+                          ) : (
+                            <img
+                              alt={entry.title || collection?.displayName || `Featured card ${index + 1}`}
+                              src={previewImageUrl ?? previewUrl}
+                            />
+                          )
+                        ) : (
+                          <div className="collectionPlaceholder">No preview</div>
+                        )}
+
+                        <div className="featuredEntryPreviewMeta">
+                          <strong>{entryTitle}</strong>
+                          <span>{entrySubtitle}</span>
+                        </div>
+                        {availableAssets.length > 1 ? (
+                          <div className="featuredEntryPreviewControls">
+                            <button
+                              aria-label={`Previous media for featured card ${index + 1}`}
+                              className="featuredEntryPreviewNav featuredEntryPreviewNavLeft"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                cycleEntryAsset(entry.id, availableAssets, previewAsset, 'previous')
+                              }}
+                            />
+                            <button
+                              aria-label={`Next media for featured card ${index + 1}`}
+                              className="featuredEntryPreviewNav featuredEntryPreviewNavRight"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                cycleEntryAsset(entry.id, availableAssets, previewAsset, 'next')
+                              }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
 
-                      <div className="featuredEntryGrid">
-                        <label className="settingsField">
-                          <span>Collection</span>
-                          <select
-                            className="settingsSelect"
-                            value={entry.collectionId}
-                            onChange={(event) =>
-                              updateEntry(entry.id, (currentEntry) => ({
-                                ...currentEntry,
-                                collectionId: event.target.value,
-                                assetPath: null,
-                              }))
-                            }
-                          >
-                            {collections.map((candidate) => (
-                              <option key={candidate.id} value={candidate.id}>
-                                {candidate.displayName} ({candidate.id})
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                      <div className="featuredEntryContent">
+                        <div className="featuredEntryHeader">
+                          <div>
+                            <strong>Featured Card {index + 1}</strong>
+                            <p className="featuredEntryLabel">Hall workbench card</p>
+                          </div>
+                          <div className="featuredEntryToolbar">
+                            <button
+                              aria-label={`Drag featured card ${index + 1}`}
+                              className="ghostButton featuredEntryAction featuredEntryDragHandle"
+                              draggable
+                              type="button"
+                              onDragEnd={handleEntryDragEnd}
+                              onDragStart={(event) => handleEntryDragStart(event, entry.id)}
+                            >
+                              Drag
+                            </button>
+                            <button
+                              className="ghostButton featuredEntryAction"
+                              disabled={index === 0}
+                              type="button"
+                              onClick={() => moveEntry(entry.id, 'up')}
+                            >
+                              Move Up
+                            </button>
+                            <button
+                              className="ghostButton featuredEntryAction"
+                              disabled={index === featuredEntries.length - 1}
+                              type="button"
+                              onClick={() => moveEntry(entry.id, 'down')}
+                            >
+                              Move Down
+                            </button>
+                            <button
+                              className="ghostButton featuredEntryAction"
+                              type="button"
+                              onClick={() => duplicateEntry(entry.id)}
+                            >
+                              Duplicate
+                            </button>
+                            <button
+                              className="ghostButton featuredEntryAction featuredEntryDanger"
+                              type="button"
+                              onClick={() => removeEntry(entry.id)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
 
-                        <label className="settingsField">
-                          <span>Media</span>
-                          <select
-                            className="settingsSelect"
-                            value={entry.assetPath ?? ''}
-                            onChange={(event) =>
-                              updateEntry(entry.id, (currentEntry) => ({
-                                ...currentEntry,
-                                assetPath: event.target.value || null,
-                              }))
-                            }
-                          >
-                            <option value="">Auto (collection featured / cover)</option>
-                            {availableAssets.map((asset) => (
-                              <option key={asset.path} value={asset.path}>
-                                [{asset.type === 'image' ? 'Image' : 'Video'}] {asset.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <div className="featuredEntryGrid">
+                          <label className="settingsField">
+                            <span>Collection</span>
+                            <select
+                              className="settingsSelect"
+                              value={entry.collectionId}
+                              onChange={(event) =>
+                                updateEntry(entry.id, (currentEntry) => ({
+                                  ...currentEntry,
+                                  collectionId: event.target.value,
+                                  assetPath: null,
+                                }))
+                              }
+                            >
+                              {collections.map((candidate) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {candidate.displayName} ({candidate.id})
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                        <label className="settingsField">
-                          <span>Title</span>
-                          <input
-                            className="settingsInput"
-                            type="text"
-                            value={entry.title}
-                            onChange={(event) =>
-                              updateEntry(entry.id, (currentEntry) => ({
-                                ...currentEntry,
-                                title: event.target.value,
-                              }))
-                            }
-                          />
-                        </label>
+                          <label className="settingsField">
+                            <span>Media</span>
+                            <select
+                              className="settingsSelect"
+                              value={entry.assetPath ?? ''}
+                              onChange={(event) =>
+                                updateEntry(entry.id, (currentEntry) => ({
+                                  ...currentEntry,
+                                  assetPath: event.target.value || null,
+                                }))
+                              }
+                            >
+                              <option value="">Auto (collection featured / cover)</option>
+                              {availableAssets.map((asset) => (
+                                <option key={asset.path} value={asset.path}>
+                                  [{asset.type === 'image' ? 'Image' : 'Video'}] {asset.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                        <label className="settingsField">
-                          <span>Subtitle</span>
-                          <input
-                            className="settingsInput"
-                            type="text"
-                            value={entry.subtitle}
-                            onChange={(event) =>
-                              updateEntry(entry.id, (currentEntry) => ({
-                                ...currentEntry,
-                                subtitle: event.target.value,
-                              }))
-                            }
-                          />
-                        </label>
+                          <label className="settingsField">
+                            <span>Title</span>
+                            <input
+                              className="settingsInput"
+                              type="text"
+                              value={entry.title}
+                              onChange={(event) =>
+                                updateEntry(entry.id, (currentEntry) => ({
+                                  ...currentEntry,
+                                  title: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+
+                          <label className="settingsField">
+                            <span>Subtitle</span>
+                            <input
+                              className="settingsInput"
+                              type="text"
+                              value={entry.subtitle}
+                              onChange={(event) =>
+                                updateEntry(entry.id, (currentEntry) => ({
+                                  ...currentEntry,
+                                  subtitle: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+
+                        <div className="featuredEntryFooter">
+                          <label className="settingsToggle">
+                            <input
+                              checked={entry.enabled}
+                              type="checkbox"
+                              onChange={(event) =>
+                                updateEntry(entry.id, (currentEntry) => ({
+                                  ...currentEntry,
+                                  enabled: event.target.checked,
+                                }))
+                              }
+                            />
+                            <span>Enable this featured card</span>
+                          </label>
+
+                          <div className="featuredEntryBadges">
+                            <span className="pill">CD.{collection?.id ?? '000000'}</span>
+                            <span className="pill">{previewAsset?.type === 'video' ? 'Video' : 'Image'}</span>
+                          </div>
+                        </div>
                       </div>
-
-                      <label className="settingsToggle">
-                        <input
-                          checked={entry.enabled}
-                          type="checkbox"
-                          onChange={(event) =>
-                            updateEntry(entry.id, (currentEntry) => ({
-                              ...currentEntry,
-                              enabled: event.target.checked,
-                            }))
-                          }
-                        />
-                        <span>Enable this featured card</span>
-                      </label>
                     </article>
                   )
                 })}
@@ -1357,6 +1900,8 @@ function FeaturedFullscreenOverlay({
   muted: boolean
   onClose: () => void
 }) {
+  usePageScrollLock(true)
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -1369,7 +1914,7 @@ function FeaturedFullscreenOverlay({
   }, [onClose])
 
   return (
-    <div className="viewerOverlay" role="dialog" aria-modal="true">
+    <div className="viewerOverlay" role="dialog" aria-modal="true" onWheel={(event) => event.preventDefault()}>
       <div className="featuredFullscreenBackdrop" onClick={onClose} />
 
       <div className="featuredFullscreenShell">
@@ -1417,6 +1962,8 @@ function HallFullscreenOverlay({
   muted: boolean
   onClose: () => void
 }) {
+  usePageScrollLock(true)
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -1429,7 +1976,12 @@ function HallFullscreenOverlay({
   }, [onClose])
 
   return (
-    <div className="viewerOverlay hallFullscreenOverlay" role="dialog" aria-modal="true">
+    <div
+      className="viewerOverlay hallFullscreenOverlay"
+      role="dialog"
+      aria-modal="true"
+      onWheel={(event) => event.preventDefault()}
+    >
       <div className="hallFullscreenBackdrop" onClick={onClose} />
       <div className="hallFullscreenShell">
         <button
@@ -1620,6 +2172,7 @@ function CollectionDetailPage() {
           asset={activeAsset}
           assetIndex={activeAssetIndex ?? 0}
           collection={resolvedCollection}
+          config={galleryState.config}
           onClose={() => setActiveAssetIndex(null)}
           onNext={() =>
             setActiveAssetIndex((currentIndex) =>
@@ -1755,6 +2308,7 @@ function FullscreenViewer({
   asset,
   assetIndex,
   collection,
+  config,
   onClose,
   onNext,
   onPrevious,
@@ -1763,16 +2317,42 @@ function FullscreenViewer({
   asset: GalleryAsset
   assetIndex: number
   collection: CollectionRecord
+  config: GalleryState['config']
   onClose: () => void
   onNext: () => void
   onPrevious: () => void
   onSelect: (index: number) => void
 }) {
+  usePageScrollLock(true)
+
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, collection.assets)
 
+  useEffect(() => {
+    if (!config.fullscreenSlideshowEnabled) {
+      return
+    }
+
+    if (asset.type === 'video' && config.fullscreenVideoAdvanceOnEnded) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      onNext()
+    }, config.fullscreenSlideshowIntervalSeconds * 1000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    asset.path,
+    asset.type,
+    config.fullscreenSlideshowEnabled,
+    config.fullscreenSlideshowIntervalSeconds,
+    config.fullscreenVideoAdvanceOnEnded,
+    onNext,
+  ])
+
   return (
-    <div className="viewerOverlay" role="dialog" aria-modal="true">
+    <div className="viewerOverlay" role="dialog" aria-modal="true" onWheel={(event) => event.preventDefault()}>
       <div className="viewerBackdrop" onClick={onClose} />
 
       <div className="viewerShell">
@@ -1799,7 +2379,12 @@ function FullscreenViewer({
                 autoPlay
                 className="viewerVideo"
                 controls
-                loop
+                loop={!config.fullscreenSlideshowEnabled || !config.fullscreenVideoAdvanceOnEnded}
+                onEnded={() => {
+                  if (config.fullscreenSlideshowEnabled && config.fullscreenVideoAdvanceOnEnded) {
+                    onNext()
+                  }
+                }}
                 playsInline
                 poster={previewImageUrl ?? undefined}
                 src={assetUrl}
