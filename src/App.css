@@ -1,0 +1,1242 @@
+.shell {
+  min-height: 100vh;
+  isolation: isolate;
+  padding: 32px;
+  position: relative;
+}
+
+.shell::before,
+.shell::after {
+  content: '';
+  pointer-events: none;
+  position: fixed;
+  z-index: -1;
+}
+
+.shell::before {
+  background:
+    radial-gradient(circle at 0% 10%, rgba(98, 223, 206, 0.12), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(255, 156, 120, 0.12), transparent 20%),
+    radial-gradient(circle at 50% 100%, rgba(120, 129, 255, 0.12), transparent 28%);
+  inset: 0;
+}
+
+.shell::after {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-position: center;
+  background-size: 96px 96px;
+  inset: 0;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 72%);
+  opacity: 0.18;
+}
+
+.topbar,
+.detailTopbar {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.topbarActions,
+.detailTitleBlock,
+.detailStats,
+.settingsActions {
+  display: flex;
+  gap: 12px;
+}
+
+.detailTitleBlock {
+  align-items: flex-start;
+}
+
+.eyebrow,
+.sectionTag {
+  color: #8ce7d6;
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.topbar h1,
+.detailTopbar h1,
+.panelHeader h2,
+.heroCopy h2,
+.detailMeta h2 {
+  margin: 0;
+}
+
+.topbar h1,
+.detailTopbar h1 {
+  font-size: clamp(2rem, 2.8vw, 3rem);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+
+.subtitle,
+.heroCopy p,
+.detailCopy {
+  color: rgba(225, 235, 255, 0.78);
+  line-height: 1.6;
+  margin: 12px 0 0;
+  max-width: 62ch;
+}
+
+.layout,
+.detailLayout {
+  display: grid;
+  gap: 26px;
+}
+
+.statusBanner {
+  backdrop-filter: blur(18px);
+  background: rgba(12, 18, 33, 0.72);
+  border: 1px solid rgba(159, 202, 255, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  margin-bottom: 20px;
+  padding: 12px 16px;
+}
+
+.statusBanner.error {
+  background: rgba(176, 54, 54, 0.16);
+  border-color: rgba(255, 136, 136, 0.24);
+}
+
+.heroPanel,
+.gridPanel,
+.detailHero {
+  backdrop-filter: blur(22px);
+  background:
+    linear-gradient(140deg, rgba(18, 29, 52, 0.9), rgba(7, 10, 18, 0.76)),
+    radial-gradient(circle at top right, rgba(255, 170, 120, 0.1), transparent 28%),
+    rgba(9, 16, 28, 0.72);
+  border: 1px solid rgba(156, 210, 255, 0.11);
+  border-radius: 30px;
+  box-shadow:
+    0 22px 90px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.heroPanel,
+.detailHero {
+  align-items: center;
+  display: grid;
+  gap: 30px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 420px);
+  padding: 32px;
+}
+
+.heroCopy,
+.detailMeta {
+  position: relative;
+}
+
+.heroCopy::before,
+.detailMeta::before {
+  background: linear-gradient(90deg, rgba(140, 231, 214, 0.85), rgba(140, 231, 214, 0));
+  border-radius: 999px;
+  content: '';
+  height: 1px;
+  left: 0;
+  position: absolute;
+  top: -14px;
+  width: min(220px, 60%);
+}
+
+.featuredCard {
+  background:
+    linear-gradient(180deg, rgba(226, 234, 252, 0.14), rgba(118, 128, 148, 0.06)),
+    rgba(10, 15, 28, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 34px;
+  box-shadow:
+    0 28px 60px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  padding: 20px;
+}
+
+.featuredArtworkShell,
+.featuredActions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.featuredArtworkShell {
+  justify-content: center;
+}
+
+.featuredArtworkButton {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+.featuredArtwork,
+.detailCover {
+  aspect-ratio: 0.67;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 219, 149, 0.95), transparent 28%),
+    radial-gradient(circle at 28% 28%, rgba(255, 129, 110, 0.9), transparent 24%),
+    linear-gradient(160deg, #36224f 8%, #ca5f50 45%, #f3bf68 100%);
+  border-radius: 24px;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.featuredArtwork img,
+.featuredArtwork video,
+.detailCover img,
+.collectionCover img,
+.assetPreview img,
+.assetPreview video {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.featuredPoster,
+.featuredBannerVideo {
+  inset: 0;
+  position: absolute;
+}
+
+.featuredPoster {
+  opacity: 1;
+  transition: opacity 180ms ease;
+  z-index: 1;
+}
+
+.featuredPosterHidden {
+  opacity: 0;
+}
+
+.featuredBannerVideo {
+  opacity: 0;
+  transition: opacity 180ms ease;
+  z-index: 2;
+}
+
+.featuredBannerVideoReady {
+  opacity: 1;
+}
+
+.featuredPlaceholder,
+.collectionPlaceholder {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+}
+
+.featuredMeta {
+  padding: 22px 10px 8px;
+  text-align: center;
+}
+
+.featuredCounter {
+  color: rgba(225, 235, 255, 0.62);
+  margin: 0 0 18px;
+}
+
+.collectionId {
+  color: #f3d57e;
+  display: block;
+  font-family: "Bahnschrift", "Segoe UI", sans-serif;
+  font-size: 1.42rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+  text-shadow: 0 0 18px rgba(243, 213, 126, 0.18);
+}
+
+.featuredMeta h3 {
+  font-size: 1.42rem;
+  margin: 0 0 18px;
+}
+
+.metaLine {
+  color: rgba(225, 235, 255, 0.72);
+  margin: 0 0 18px;
+}
+
+.primaryButton,
+.ghostButton,
+.inlineButton,
+.collectionCard,
+.assetCard {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+  border-radius: 999px;
+  color: #fff;
+  padding: 12px 22px;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.ghostButton {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #eaf2ff;
+  padding: 12px 18px;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.primaryButton:hover,
+.ghostButton:hover {
+  transform: translateY(-1px);
+}
+
+.primaryButton:hover {
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.18);
+}
+
+.primaryButton:disabled,
+.ghostButton:disabled,
+.inlineButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.inlineButton {
+  background: transparent;
+  color: #8ce7d6;
+  padding: 0;
+}
+
+.gridPanel {
+  padding: 28px;
+}
+
+.settingsPanel {
+  padding-bottom: 28px;
+}
+
+.panelHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.pill {
+  background: rgba(140, 231, 214, 0.14);
+  border: 1px solid rgba(140, 231, 214, 0.24);
+  border-radius: 999px;
+  color: #8ce7d6;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
+.collectionGrid,
+.assetGrid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.settingsList {
+  display: grid;
+  gap: 18px;
+}
+
+.settingsCardWide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settingsCard {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 24px;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  overflow: hidden;
+  padding: 18px;
+}
+
+.settingsPreview {
+  aspect-ratio: 0.72;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+}
+
+.settingsPreview img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.settingsBody {
+  display: grid;
+  gap: 16px;
+}
+
+.settingsHeading {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.settingsHeading h3 {
+  margin: 6px 0 0;
+}
+
+.settingsField {
+  display: grid;
+  gap: 8px;
+}
+
+.settingsField span {
+  color: rgba(225, 235, 255, 0.72);
+  font-size: 0.92rem;
+}
+
+.settingsInput,
+.settingsSelect {
+  background: rgba(7, 15, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  color: #eef4ff;
+  font: inherit;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.settingsInput:focus,
+.settingsSelect:focus {
+  border-color: rgba(140, 231, 214, 0.55);
+  outline: none;
+}
+
+.settingsHint {
+  color: rgba(225, 235, 255, 0.6);
+  margin: 0;
+  word-break: break-all;
+}
+
+.featuredEntryList {
+  display: grid;
+  gap: 16px;
+}
+
+.featuredEntryCard {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(6, 12, 22, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.featuredEntryHeader,
+.hallStageHeader,
+.hallStageMeta {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.featuredEntryGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.settingsToggle {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.settingsToggle input {
+  accent-color: #8ce7d6;
+}
+
+.collectionCard,
+.assetCard {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
+    rgba(6, 12, 22, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 26px;
+  color: inherit;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.collectionCard:hover,
+.assetCard:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(140, 231, 214, 0.16);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.26);
+  transform: translateY(-4px);
+}
+
+.collectionCover,
+.assetPreview {
+  aspect-ratio: 0.72;
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  position: relative;
+}
+
+.collectionMeta,
+.assetMeta {
+  display: grid;
+  gap: 6px;
+  padding: 18px 18px 20px;
+}
+
+.assetBadge {
+  background: rgba(5, 12, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: #f2f6ff;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  position: absolute;
+  right: 12px;
+  text-transform: uppercase;
+  top: 12px;
+}
+
+.collectionMeta span,
+.assetMeta span {
+  color: rgba(225, 235, 255, 0.68);
+  font-size: 0.94rem;
+}
+
+.assetMeta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.importList {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 22px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  margin-top: 22px;
+  padding: 16px;
+}
+
+.importList strong {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.importPathRow {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.importPathRow span {
+  color: rgba(225, 235, 255, 0.76);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyState {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  color: rgba(225, 235, 255, 0.82);
+  padding: 28px;
+}
+
+.emptyState strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.hallShell::before {
+  background:
+    radial-gradient(circle at 14% 16%, rgba(94, 212, 205, 0.16), transparent 22%),
+    radial-gradient(circle at 82% 8%, rgba(255, 171, 115, 0.16), transparent 18%),
+    radial-gradient(circle at 50% 100%, rgba(140, 126, 255, 0.16), transparent 26%);
+}
+
+.hallBackdrop {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: fixed;
+  z-index: -2;
+}
+
+.hallBackdrop::after {
+  backdrop-filter: blur(10px);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(7, 13, 24, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(4, 8, 16, 0.2), rgba(4, 8, 16, 0.84));
+  content: '';
+  inset: 0;
+  position: absolute;
+}
+
+.hallBackdrop img,
+.hallBackdrop video {
+  filter: blur(24px) saturate(1.08);
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.36;
+  transform: scale(1.08);
+  width: 100%;
+}
+
+.hallLayout {
+  align-items: start;
+  display: grid;
+  gap: 26px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr);
+}
+
+.hallStagePanel {
+  background:
+    radial-gradient(circle at 50% 26%, rgba(255, 216, 148, 0.12), transparent 20%),
+    radial-gradient(circle at 18% 22%, rgba(255, 122, 104, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(7, 13, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 34px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 28px 90px rgba(0, 0, 0, 0.3);
+  min-height: 760px;
+  overflow: hidden;
+  padding: 28px;
+  position: relative;
+}
+
+.hallStagePanel::before {
+  background:
+    radial-gradient(circle at 50% 55%, rgba(136, 155, 214, 0.18), transparent 28%),
+    radial-gradient(circle at 50% 100%, rgba(255, 208, 145, 0.08), transparent 36%);
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.hallStageHeader,
+.hallViewport,
+.hallInfoPanel {
+  position: relative;
+  z-index: 1;
+}
+
+.hallStageHeader {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.hallStageMeta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.hallStageHint {
+  color: rgba(225, 235, 255, 0.66);
+  font-size: 0.9rem;
+}
+
+.hallViewport {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 72px;
+  min-height: 640px;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.hallNavButton {
+  backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.hallRing {
+  min-height: 620px;
+  perspective: 1800px;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.hallCard {
+  background:
+    linear-gradient(180deg, rgba(233, 238, 248, 0.16), rgba(110, 118, 142, 0.06)),
+    rgba(10, 15, 28, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 34px;
+  box-shadow:
+    0 34px 70px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: inherit;
+  display: grid;
+  gap: 18px;
+  left: 50%;
+  opacity: var(--hall-opacity);
+  overflow: hidden;
+  padding: 18px 18px 20px;
+  position: absolute;
+  top: 50%;
+  transform:
+    translate(-50%, -50%)
+    translateX(calc(var(--hall-offset) * 188px))
+    translateZ(var(--hall-depth))
+    rotateY(calc(var(--hall-offset) * -28deg))
+    scale(var(--hall-scale));
+  transition:
+    transform 240ms ease,
+    opacity 240ms ease,
+    box-shadow 240ms ease,
+    border-color 240ms ease;
+  width: min(100%, 360px);
+  z-index: var(--hall-z);
+}
+
+.hallCard:hover {
+  border-color: rgba(140, 231, 214, 0.2);
+  box-shadow:
+    0 44px 90px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.hallCardActive {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 48px 110px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.hallCardArtwork {
+  aspect-ratio: 0.67;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 219, 149, 0.95), transparent 28%),
+    radial-gradient(circle at 28% 28%, rgba(255, 129, 110, 0.9), transparent 24%),
+    linear-gradient(160deg, #36224f 8%, #ca5f50 45%, #f3bf68 100%);
+  border-radius: 26px;
+  display: grid;
+  overflow: hidden;
+  place-items: stretch;
+  position: relative;
+}
+
+.hallCardArtwork img,
+.hallCardArtwork video {
+  backface-visibility: hidden;
+  border-radius: inherit;
+  display: block;
+  filter: blur(var(--hall-blur));
+  height: calc(100% + 4px);
+  inset: -2px;
+  object-fit: cover;
+  position: absolute;
+  transform: translateZ(0);
+  transition: filter 240ms ease, transform 240ms ease;
+  width: calc(100% + 4px);
+}
+
+.hallCardMeta {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+}
+
+.hallCardMeta .collectionId {
+  font-size: 1.22rem;
+}
+
+.hallCardMeta strong {
+  font-size: 1.28rem;
+}
+
+.hallCardMeta span:last-child {
+  color: rgba(225, 235, 255, 0.72);
+}
+
+.hallInfoPanel {
+  align-self: stretch;
+  background:
+    linear-gradient(180deg, rgba(17, 29, 50, 0.78), rgba(7, 12, 22, 0.82)),
+    rgba(10, 15, 28, 0.64);
+  padding: 22px;
+}
+
+.hallInfoBody {
+  display: grid;
+  gap: 12px;
+}
+
+.hallInfoPanel .subtitle {
+  margin-top: 0;
+  max-width: none;
+}
+
+.hallTitleButton {
+  background: transparent;
+  border: 0;
+  color: #eef4ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: clamp(1.4rem, 2.6vw, 2.1rem);
+  font-weight: 760;
+  letter-spacing: -0.03em;
+  padding: 0;
+  text-align: left;
+}
+
+.hallTitleButton:hover {
+  color: #8ce7d6;
+}
+
+.hallInfoMeta {
+  color: rgba(225, 235, 255, 0.64);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hallInfoActions {
+  display: flex;
+  gap: 12px;
+}
+
+.mutedText {
+  color: rgba(225, 235, 255, 0.6);
+}
+
+.detailMeta {
+  display: grid;
+  gap: 12px;
+}
+
+.detailStats {
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.viewerOverlay {
+  inset: 0;
+  position: fixed;
+  z-index: 1000;
+}
+
+.viewerBackdrop {
+  backdrop-filter: blur(18px);
+  background: rgba(3, 7, 14, 0.88);
+  inset: 0;
+  position: absolute;
+}
+
+.featuredFullscreenBackdrop {
+  background: rgba(2, 4, 10, 0.96);
+  inset: 0;
+  position: absolute;
+}
+
+.hallFullscreenOverlay {
+  overflow: hidden;
+}
+
+.hallFullscreenBackdrop {
+  background: rgba(2, 4, 10, 0.82);
+  inset: 0;
+  position: absolute;
+}
+
+.viewerShell {
+  display: grid;
+  gap: 18px;
+  inset: 0;
+  padding: 28px;
+  position: absolute;
+}
+
+.featuredFullscreenShell {
+  inset: 0;
+  padding: 24px;
+  position: absolute;
+}
+
+.hallFullscreenShell {
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
+}
+
+.viewerToolbar,
+.viewerTopLayer {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.viewerInfoCard {
+  backdrop-filter: blur(18px);
+  background: rgba(7, 15, 28, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
+  max-width: min(72ch, 100%);
+  padding: 14px 16px;
+}
+
+.viewerTitle {
+  display: block;
+  font-size: 1.15rem;
+}
+
+.viewerMeta {
+  color: rgba(225, 235, 255, 0.72);
+  margin: 6px 0 0;
+}
+
+.viewerStage {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 88px minmax(0, 1fr) 88px;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.featuredFullscreenStage {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  inset: 0;
+  padding: 24px;
+  position: absolute;
+  z-index: 1;
+}
+
+.hallFullscreenStage {
+  align-items: center;
+  background: #02050c;
+  display: flex;
+  justify-content: center;
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
+}
+
+.featuredFullscreenClose {
+  align-items: center;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: #eef4ff;
+  cursor: pointer;
+  display: flex;
+  font-size: 0;
+  height: 56px;
+  justify-content: center;
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  width: 56px;
+  z-index: 2;
+}
+
+.featuredFullscreenClose::before {
+  content: 'x';
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.viewerMediaFrame {
+  align-items: center;
+  border-radius: 26px;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.viewerBackdropArt {
+  filter: blur(26px);
+  inset: 0;
+  opacity: 0.28;
+  position: absolute;
+  transform: scale(1.08);
+}
+
+.viewerImage,
+.viewerVideo {
+  max-height: calc(100vh - 160px);
+  max-width: 100%;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+
+.hallFullscreenMedia {
+  height: 100%;
+  max-height: 100vh;
+  max-width: 100vw;
+  object-fit: contain;
+  width: 100%;
+}
+
+.viewerNav {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: #eef4ff;
+  display: flex;
+  font-size: 0;
+  height: 72px;
+  justify-content: center;
+  width: 72px;
+}
+
+.featuredNavButton {
+  flex: 0 0 auto;
+}
+
+.viewerNavLeft::before,
+.featuredNavButtonLeft::before {
+  content: '<';
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.viewerNavRight::before,
+.featuredNavButtonRight::before {
+  content: '>';
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.viewerThumbRail {
+  display: grid;
+  gap: 12px;
+  grid-auto-columns: minmax(104px, 140px);
+  grid-auto-flow: column;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+.viewerThumbDock {
+  bottom: 0;
+  left: 0;
+  padding: 0 24px 24px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  z-index: 2;
+}
+
+.viewerThumbHotspot {
+  height: 44px;
+  margin-top: 16px;
+  pointer-events: auto;
+}
+
+.viewerThumbPanel {
+  backdrop-filter: blur(20px);
+  background: linear-gradient(180deg, rgba(8, 13, 24, 0.18), rgba(8, 13, 24, 0.84));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  opacity: 0;
+  padding: 12px;
+  pointer-events: none;
+  transform: translateY(18px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.viewerThumbDock:hover .viewerThumbPanel,
+.viewerThumbDock:focus-within .viewerThumbPanel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.viewerThumbButton {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  text-align: left;
+}
+
+.viewerThumbButtonActive {
+  background: rgba(140, 231, 214, 0.12);
+  border-color: rgba(140, 231, 214, 0.36);
+}
+
+.viewerThumbMedia {
+  aspect-ratio: 0.78;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.viewerThumbMedia img,
+.viewerThumbMedia video {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.viewerThumbLabel {
+  color: rgba(225, 235, 255, 0.74);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .heroPanel,
+  .detailHero,
+  .hallLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .hallStagePanel {
+    min-height: 680px;
+  }
+}
+
+@media (hover: none) {
+  .viewerThumbPanel {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding: 18px;
+  }
+
+  .topbar,
+  .panelHeader,
+  .detailTopbar,
+  .detailTitleBlock,
+  .viewerToolbar,
+  .viewerTopLayer,
+  .settingsHeading,
+  .hallStageHeader,
+  .hallStageMeta {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topbarActions,
+  .importPathRow,
+  .detailStats,
+  .settingsActions,
+  .featuredActions,
+  .hallInfoActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settingsCard {
+    grid-template-columns: 1fr;
+  }
+
+  .viewerStage,
+  .hallViewport {
+    grid-template-columns: 1fr;
+  }
+
+  .viewerNav {
+    display: none;
+  }
+
+  .hallStagePanel,
+  .hallRing {
+    min-height: unset;
+  }
+
+  .hallViewport {
+    min-height: 0;
+  }
+
+  .hallRing {
+    display: grid;
+    gap: 18px;
+    perspective: none;
+  }
+
+  .hallCard {
+    left: auto;
+    position: relative;
+    top: auto;
+    transform: none;
+    width: 100%;
+  }
+
+  .viewerThumbDock {
+    padding: 0 12px 12px;
+  }
+}
