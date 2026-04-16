@@ -5,6 +5,12 @@
   position: relative;
 }
 
+.hallShell {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 100vh;
+}
+
 .shell::before,
 .shell::after {
   content: '';
@@ -365,6 +371,15 @@
 
 .settingsCardWide {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.settingsTextPanel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(6, 12, 22, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 22px;
 }
 
 .settingsCard {
@@ -753,7 +768,18 @@
 
 .importList strong {
   display: block;
+}
+
+.importListHeader {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.importToggleButton {
+  padding: 8px 14px;
 }
 
 .importPathRow {
@@ -1033,6 +1059,11 @@
   font-size: 1rem;
 }
 
+.hallCardMeta span:last-child {
+  color: rgba(225, 235, 255, 0.72);
+  font-size: 0.92rem;
+}
+
 .hallInfoPanel {
   align-self: stretch;
   background:
@@ -1090,11 +1121,21 @@
   gap: 12px;
 }
 
+.hallPortraitMeta,
+.hallEntryDock {
+  display: none;
+}
+
 .hallHeroMeta {
   display: grid;
   gap: 8px;
   justify-items: center;
   text-align: center;
+}
+
+.hallHeroAssetLabel {
+  color: rgba(225, 235, 255, 0.76);
+  font-size: 0.96rem;
 }
 
 .hallHeroMeta strong {
@@ -1125,6 +1166,31 @@
   overscroll-behavior: none;
   position: fixed;
   z-index: 1000;
+}
+
+.viewerAudioToggle {
+  align-items: center;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: #eef4ff;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 96px;
+  opacity: 0;
+  padding: 0 16px;
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  transform: translateY(-6px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  z-index: 2;
 }
 
 .viewerBackdrop {
@@ -1178,6 +1244,10 @@
   gap: 16px;
   position: relative;
   z-index: 1;
+}
+
+.viewerActionSpacer {
+  width: 96px;
 }
 
 .viewerInfoCard {
@@ -1262,7 +1332,9 @@
 }
 
 .viewerOverlay:hover .featuredFullscreenClose,
-.viewerOverlay:focus-within .featuredFullscreenClose {
+.viewerOverlay:focus-within .featuredFullscreenClose,
+.viewerOverlay:hover .viewerAudioToggle,
+.viewerOverlay:focus-within .viewerAudioToggle {
   opacity: 1;
   transform: translateY(0);
 }
@@ -1431,6 +1503,11 @@
   .hallStagePanel {
     min-height: 680px;
   }
+
+  .hallInfoPanel {
+    position: relative;
+    top: auto;
+  }
 }
 
 @media (hover: none) {
@@ -1444,9 +1521,19 @@
     opacity: 1;
     transform: translateY(0);
   }
+
+  .viewerAudioToggle {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 720px) {
+  .hallShell {
+    display: block;
+    min-height: 100vh;
+  }
+
   .shell {
     padding: 18px;
   }
@@ -1472,6 +1559,11 @@
   .hallInfoActions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .importListHeader {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .settingsCard {
@@ -1509,11 +1601,14 @@
   }
 
   .hallViewport {
+    align-items: stretch;
+    display: block;
     min-height: 0;
   }
 
   .hallStageOrbit {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 18px;
   }
 
@@ -1521,11 +1616,16 @@
     display: none;
   }
 
+  .hallHeroCard {
+    order: 1;
+  }
+
   .hallRing {
     display: grid;
     gap: 18px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     inset: auto;
+    order: 2;
     perspective: none;
     position: relative;
   }
@@ -1543,7 +1643,266 @@
     justify-self: stretch;
   }
 
+  .hallInfoPanel {
+    overflow: visible;
+    position: relative;
+    top: auto;
+  }
+
   .viewerThumbDock {
     padding: 0 12px 12px;
+  }
+}
+
+@media (max-width: 980px) and (orientation: portrait) {
+  .hallShell {
+    display: grid;
+    gap: 0;
+    grid-template-rows: minmax(0, 1fr);
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    padding: 10px;
+  }
+
+  .hallShell .topbar,
+  .hallShell .statusBanner,
+  .hallStageHeader,
+  .hallInfoPanel {
+    display: none;
+  }
+
+  .hallLayout {
+    display: grid;
+    gap: 0;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .hallStagePanel {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    display: grid;
+    gap: 0;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 0 10px;
+  }
+
+  .hallStagePanel::before,
+  .hallOrbitTrack {
+    display: none;
+  }
+
+  .hallViewport {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+    height: 100%;
+    min-height: 0;
+    overflow: visible;
+    position: relative;
+    touch-action: none;
+  }
+
+  .hallViewport > .viewerNav {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    display: flex;
+    height: auto;
+    opacity: 0;
+    position: absolute;
+    top: 0;
+    width: 26%;
+    z-index: 40;
+  }
+
+  .hallNavButtonLeft {
+    left: 0;
+  }
+
+  .hallNavButtonRight {
+    right: 0;
+  }
+
+  .hallViewport > .viewerNav::before {
+    content: '';
+  }
+
+  .hallStageOrbit {
+    align-items: center;
+    display: grid;
+    height: 100%;
+    justify-items: center;
+    min-height: 0;
+    padding: 7vh 0 2vh;
+    position: relative;
+  }
+
+  .hallRing {
+    display: block;
+    inset: 0;
+    overflow: visible;
+    perspective: 1200px;
+    position: absolute;
+  }
+
+  .hallSideCard,
+  .hallHeroCard {
+    backface-visibility: hidden;
+  }
+
+  .hallSideCard {
+    background:
+      linear-gradient(180deg, rgba(233, 238, 248, 0.13), rgba(110, 118, 142, 0.04)),
+      rgba(10, 15, 28, 0.36);
+    border-radius: 24px;
+    gap: 0;
+    padding: 9px;
+    top: 50%;
+    transform:
+      translate(-50%, -50%)
+      translateX(calc(var(--hall-offset) * 31vw))
+      translateY(calc(var(--hall-y) * 0.3))
+      translateZ(calc(var(--hall-depth) * 0.34))
+      rotateY(calc(var(--hall-offset) * -46deg))
+      scale(calc(var(--hall-scale) * 0.86));
+    width: min(28vw, 140px);
+  }
+
+  .hallSideCard .hallCardArtwork,
+  .hallHeroArtwork,
+  .hallHeroFrame {
+    border-radius: 22px;
+  }
+
+  .hallHeroCard {
+    align-self: center;
+    background:
+      linear-gradient(180deg, rgba(233, 238, 248, 0.16), rgba(110, 118, 142, 0.05)),
+      rgba(10, 15, 28, 0.5);
+    border-radius: 30px;
+    gap: 0;
+    padding: 11px;
+    justify-self: center;
+    margin: 0 auto;
+    width: min(64vw, 352px);
+  }
+
+  .hallHeroFrame {
+    padding: 7px;
+  }
+
+  .hallSideCard .hallCardMeta,
+  .hallHeroMeta {
+    display: none;
+  }
+
+  .hallPortraitMeta {
+    display: grid;
+    justify-items: center;
+    padding: 2px 18px 0;
+    position: relative;
+    z-index: 3;
+  }
+
+  .hallPortraitTitleRow {
+    align-items: center;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(24px, 1fr) auto minmax(24px, 1fr);
+    width: min(74vw, 360px);
+  }
+
+  .hallPortraitTitleLine {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 246, 203, 0.7), rgba(255, 255, 255, 0));
+    border-radius: 999px;
+    display: block;
+    height: 1px;
+    opacity: 0.9;
+    width: 100%;
+  }
+
+  .hallPortraitTitleButton {
+    background: transparent;
+    border: 0;
+    color: #f5f1df;
+    cursor: pointer;
+    font: inherit;
+    font-size: clamp(1.18rem, 4.8vw, 1.56rem);
+    letter-spacing: 0.01em;
+    line-height: 1.08;
+    padding: 0;
+    text-align: center;
+    text-shadow: 0 6px 22px rgba(0, 0, 0, 0.34);
+  }
+
+  .hallEntryDock {
+    display: flex;
+    justify-content: center;
+    padding: 12px 8px 4px;
+    position: relative;
+    z-index: 3;
+  }
+
+  .hallEntryRail {
+    display: grid;
+    gap: 10px;
+    grid-auto-columns: 54px;
+    grid-auto-flow: column;
+    justify-content: center;
+    margin: 0 auto;
+    max-width: min(78vw, 420px);
+    overflow-x: auto;
+    padding: 0 6px 6px;
+    scrollbar-width: none;
+    width: max-content;
+  }
+
+  .hallEntryRail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hallEntryThumb {
+    appearance: none;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    cursor: pointer;
+    padding: 4px;
+    transition:
+      transform 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      opacity 180ms ease;
+  }
+
+  .hallEntryThumbActive {
+    border-color: rgba(255, 242, 187, 0.74);
+    box-shadow:
+      0 0 0 1px rgba(255, 242, 187, 0.18),
+      0 10px 24px rgba(0, 0, 0, 0.22);
+    transform: translateY(-2px);
+  }
+
+  .hallEntryThumbMedia {
+    aspect-ratio: 0.72;
+    border-radius: 10px;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .hallEntryThumbMedia img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
   }
 }

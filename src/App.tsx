@@ -8,7 +8,6 @@
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
-  type WheelEvent as ReactWheelEvent,
 } from 'react'
 import { HashRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import './App.css'
@@ -23,6 +22,7 @@ const emptyState: GalleryState = {
     fullscreenSlideshowEnabled: false,
     fullscreenSlideshowIntervalSeconds: 6,
     fullscreenVideoAdvanceOnEnded: true,
+    fullscreenSlideshowShuffleAllCollections: false,
     collectionsSort: 'id_asc',
   },
   collections: [],
@@ -44,6 +44,7 @@ type GalleryContextValue = {
     fullscreenSlideshowEnabled?: boolean
     fullscreenSlideshowIntervalSeconds?: number
     fullscreenVideoAdvanceOnEnded?: boolean
+    fullscreenSlideshowShuffleAllCollections?: boolean
   }) => Promise<void>
   updateCollection: (
     collectionId: string,
@@ -222,6 +223,11 @@ function getCircularOffset(index: number, activeIndex: number, length: number) {
   )
 }
 
+function getAssetDisplayName(assetName: string) {
+  const withoutExtension = assetName.replace(/\.[^.]+$/, '')
+  return withoutExtension.replace(/^\d+[\s._-]*/, '')
+}
+
 function FeaturedBannerMedia({
   asset,
   assets,
@@ -345,6 +351,7 @@ function HomePage() {
   const featuredEntries = getResolvedFeaturedEntries(galleryState)
   const [activeFeaturedIndex, setActiveFeaturedIndex] = useState(0)
   const [featuredFullscreen, setFeaturedFullscreen] = useState(false)
+  const [importRootsExpanded, setImportRootsExpanded] = useState(false)
 
   useEffect(() => {
     if (featuredEntries.length <= 1 || featuredFullscreen) {
@@ -454,23 +461,36 @@ function HomePage() {
             </p>
 
             <div className="importList">
-              <strong>Imported roots</strong>
-              {galleryState.config.importPaths.length === 0 ? (
-                <p className="mutedText">No import folders yet.</p>
+              <div className="importListHeader">
+                <strong>Imported roots</strong>
+                <button
+                  className="ghostButton importToggleButton"
+                  type="button"
+                  onClick={() => setImportRootsExpanded((current) => !current)}
+                >
+                  {importRootsExpanded ? 'Hide' : `Show (${galleryState.config.importPaths.length})`}
+                </button>
+              </div>
+              {importRootsExpanded ? (
+                galleryState.config.importPaths.length === 0 ? (
+                  <p className="mutedText">No import folders yet.</p>
+                ) : (
+                  galleryState.config.importPaths.map((importPath) => (
+                    <div className="importPathRow" key={importPath}>
+                      <span>{importPath}</span>
+                      <button
+                        className="inlineButton"
+                        disabled={busy || !bridgeReady}
+                        type="button"
+                        onClick={() => void removeImportPath(importPath)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )
               ) : (
-                galleryState.config.importPaths.map((importPath) => (
-                  <div className="importPathRow" key={importPath}>
-                    <span>{importPath}</span>
-                    <button
-                      className="inlineButton"
-                      disabled={busy || !bridgeReady}
-                      type="button"
-                      onClick={() => void removeImportPath(importPath)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
+                <p className="mutedText">Collapsed to keep the dashboard compact.</p>
               )}
             </div>
           </div>
@@ -609,6 +629,8 @@ function HallPage() {
   const featuredEntries = getResolvedFeaturedEntries(galleryState)
   const [activeIndex, setActiveIndex] = useState(0)
   const [hallFullscreen, setHallFullscreen] = useState(false)
+  const hallViewportRef = useRef<HTMLDivElement | null>(null)
+  const hallThumbRefs = useRef<Array<HTMLButtonElement | null>>([])
   const dragStartX = useRef<number | null>(null)
   const wheelLockRef = useRef(false)
   const [autoRotatePaused, setAutoRotatePaused] = useState(false)
@@ -633,6 +655,7 @@ function HallPage() {
   const activeTitle = activeEntry?.entry.title.trim() || activeEntry?.collection.displayName || 'No active entry'
   const activeSubtitle =
     activeEntry?.entry.subtitle.trim() || `Collection ${activeEntry?.collection.id ?? '000000'}`
+  const activeAssetLabel = activeEntry?.asset ? getAssetDisplayName(activeEntry.asset.name) : ''
   const activePreviewImageUrl =
     activeEntry?.asset ? getPreviewImageUrl(activeEntry.asset, activeEntry.collection.assets) : null
   const activeBackdropUrl = activePreviewImageUrl || (activeEntry?.asset ? toAssetUrl(activeEntry.asset.path) : null)
@@ -705,29 +728,61 @@ function HallPage() {
     showNext()
   }
 
-  function handleWheel(event: ReactWheelEvent<HTMLElement>) {
-    if (featuredEntries.length <= 1 || wheelLockRef.current) {
+  useEffect(() => {
+    const viewport = hallViewportRef.current
+    if (!viewport) {
       return
     }
 
-    const axisDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
-    if (Math.abs(axisDelta) < 28) {
+    function handleViewportWheel(event: WheelEvent) {
+      if (featuredEntries.length <= 1 || wheelLockRef.current) {
+        return
+      }
+
+      const axisDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+      if (Math.abs(axisDelta) < 28) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      wheelLockRef.current = true
+      window.setTimeout(() => {
+        wheelLockRef.current = false
+      }, 180)
+
+      setAutoRotatePaused(true)
+      if (axisDelta > 0) {
+        setActiveIndex((currentIndex) =>
+          featuredEntries.length === 0 ? 0 : (currentIndex + 1) % featuredEntries.length,
+        )
+        return
+      }
+
+      setActiveIndex((currentIndex) =>
+        featuredEntries.length === 0
+          ? 0
+          : (currentIndex - 1 + featuredEntries.length) % featuredEntries.length,
+      )
+    }
+
+    viewport.addEventListener('wheel', handleViewportWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', handleViewportWheel)
+  }, [featuredEntries.length])
+
+  useEffect(() => {
+    const activeThumb = hallThumbRefs.current[resolvedActiveIndex]
+    if (!activeThumb) {
       return
     }
 
-    wheelLockRef.current = true
-    window.setTimeout(() => {
-      wheelLockRef.current = false
-    }, 180)
-
-    setAutoRotatePaused(true)
-    if (axisDelta > 0) {
-      showNext()
-      return
-    }
-
-    showPrevious()
-  }
+    activeThumb.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    })
+  }, [resolvedActiveIndex, featuredEntries.length])
 
   return (
     <div className="shell hallShell">
@@ -755,7 +810,7 @@ function HallPage() {
           <button className="ghostButton" type="button" onClick={() => navigate('/')}>
             Dashboard
           </button>
-          <button className="ghostButton" type="button" onClick={() => navigate('/settings')}>
+          <button className="ghostButton" type="button" onClick={() => navigate('/hall-settings')}>
             Edit Entries
           </button>
         </div>
@@ -782,6 +837,7 @@ function HallPage() {
           ) : (
             <div
               className="hallViewport"
+              ref={hallViewportRef}
               onBlurCapture={() => setAutoRotatePaused(false)}
               onMouseEnter={() => setAutoRotatePaused(true)}
               onMouseLeave={() => setAutoRotatePaused(false)}
@@ -790,7 +846,6 @@ function HallPage() {
               }}
               onPointerDown={handlePointerDown}
               onPointerUp={handlePointerUp}
-              onWheel={handleWheel}
             >
               <button
                 aria-label="Previous featured card"
@@ -840,6 +895,7 @@ function HallPage() {
                         </div>
                         <div className="hallCardMeta">
                           <span className="collectionId">CD.{featured.collection.id}</span>
+                          {featured.asset ? <span>{getAssetDisplayName(featured.asset.name)}</span> : null}
                         </div>
                       </button>
                     )
@@ -868,6 +924,7 @@ function HallPage() {
                     </div>
                     <div className="hallHeroMeta">
                       <span className="collectionId">CD.{activeEntry.collection.id}</span>
+                      {activeAssetLabel ? <span className="hallHeroAssetLabel">{activeAssetLabel}</span> : null}
                       <strong>{activeTitle}</strong>
                       <span>{activeSubtitle}</span>
                     </div>
@@ -884,6 +941,57 @@ function HallPage() {
               />
             </div>
           )}
+
+          {activeEntry ? (
+            <div className="hallPortraitMeta">
+              <div className="hallPortraitTitleRow">
+                <span className="hallPortraitTitleLine" aria-hidden="true" />
+                <button
+                  className="hallPortraitTitleButton"
+                  type="button"
+                  onClick={() => navigate(`/collections/${activeEntry.collection.id}`)}
+                >
+                  {activeTitle}
+                </button>
+                <span className="hallPortraitTitleLine" aria-hidden="true" />
+              </div>
+            </div>
+          ) : null}
+
+          {featuredEntries.length > 0 ? (
+            <div className="hallEntryDock">
+              <div className="hallEntryRail">
+                {featuredEntries.map((featured, index) => {
+                  const previewImageUrl = featured.asset
+                    ? getPreviewImageUrl(featured.asset, featured.collection.assets)
+                    : null
+                  const fallbackAssetUrl = featured.asset ? toAssetUrl(featured.asset.path) : null
+                  const thumbUrl = previewImageUrl ?? fallbackAssetUrl
+
+                  return (
+                    <button
+                      aria-current={index === resolvedActiveIndex ? 'true' : undefined}
+                      className={`hallEntryThumb ${index === resolvedActiveIndex ? 'hallEntryThumbActive' : ''}`}
+                      key={`hall-thumb-${featured.entry.id}`}
+                      ref={(node) => {
+                        hallThumbRefs.current[index] = node
+                      }}
+                      type="button"
+                      onClick={() => setActiveIndex(index)}
+                    >
+                      <div className="hallEntryThumbMedia">
+                        {thumbUrl ? (
+                          <img alt={featured.entry.title || featured.collection.displayName} src={thumbUrl} />
+                        ) : (
+                          <div className="collectionPlaceholder">No preview</div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="gridPanel hallInfoPanel">
@@ -927,8 +1035,10 @@ function HallPage() {
 
       {hallFullscreen && activeEntry?.asset ? (
         <HallFullscreenOverlay
+          config={galleryState.config}
           mediaType={activeEntry.asset?.type ?? null}
           muted={galleryState.config.bannerVideoMuted}
+          onNext={showNext}
           src={toAssetUrl(activeEntry.asset.path)}
           title={activeTitle}
           onClose={() => setHallFullscreen(false)}
@@ -977,7 +1087,7 @@ function SettingsPage() {
             </div>
           </div>
 
-          <article className="settingsCard settingsCardWide hallSettingsShortcutCard">
+          <article className="settingsTextPanel hallSettingsShortcutCard">
             <div className="settingsBody">
               <p className="subtitle">
                 The featured hall card builder controls what appears in the exhibition view. Open the
@@ -1044,6 +1154,7 @@ function ViewerSettingsSection({
     fullscreenSlideshowEnabled?: boolean
     fullscreenSlideshowIntervalSeconds?: number
     fullscreenVideoAdvanceOnEnded?: boolean
+    fullscreenSlideshowShuffleAllCollections?: boolean
   }) => Promise<void>
 }) {
   const [fullscreenSlideshowEnabled, setFullscreenSlideshowEnabled] = useState(config.fullscreenSlideshowEnabled)
@@ -1053,23 +1164,29 @@ function ViewerSettingsSection({
   const [fullscreenVideoAdvanceOnEnded, setFullscreenVideoAdvanceOnEnded] = useState(
     config.fullscreenVideoAdvanceOnEnded,
   )
+  const [fullscreenSlideshowShuffleAllCollections, setFullscreenSlideshowShuffleAllCollections] = useState(
+    config.fullscreenSlideshowShuffleAllCollections,
+  )
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
     setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
     setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
+    setFullscreenSlideshowShuffleAllCollections(config.fullscreenSlideshowShuffleAllCollections)
   }, [
     config.fullscreenSlideshowEnabled,
     config.fullscreenSlideshowIntervalSeconds,
     config.fullscreenVideoAdvanceOnEnded,
+    config.fullscreenSlideshowShuffleAllCollections,
   ])
 
   const normalizedInterval = Number(fullscreenSlideshowIntervalSeconds)
   const isDirty =
     fullscreenSlideshowEnabled !== config.fullscreenSlideshowEnabled ||
     normalizedInterval !== config.fullscreenSlideshowIntervalSeconds ||
-    fullscreenVideoAdvanceOnEnded !== config.fullscreenVideoAdvanceOnEnded
+    fullscreenVideoAdvanceOnEnded !== config.fullscreenVideoAdvanceOnEnded ||
+    fullscreenSlideshowShuffleAllCollections !== config.fullscreenSlideshowShuffleAllCollections
 
   async function handleSave() {
     setSaving(true)
@@ -1080,6 +1197,7 @@ function ViewerSettingsSection({
           ? normalizedInterval
           : config.fullscreenSlideshowIntervalSeconds,
         fullscreenVideoAdvanceOnEnded,
+        fullscreenSlideshowShuffleAllCollections,
       })
     } finally {
       setSaving(false)
@@ -1095,7 +1213,7 @@ function ViewerSettingsSection({
         </div>
       </div>
 
-      <article className="settingsCard settingsCardWide">
+      <article className="settingsTextPanel">
         <div className="settingsBody">
           <label className="settingsToggle">
             <input
@@ -1129,9 +1247,20 @@ function ViewerSettingsSection({
             <span>When fullscreen media is a video, continue on video end instead of waiting for the timer</span>
           </label>
 
+          <label className="settingsToggle">
+            <input
+              checked={fullscreenSlideshowShuffleAllCollections}
+              disabled={!fullscreenSlideshowEnabled}
+              type="checkbox"
+              onChange={(event) => setFullscreenSlideshowShuffleAllCollections(event.target.checked)}
+            />
+            <span>When slideshow is enabled, randomly continue with media from all imported collections</span>
+          </label>
+
           <p className="settingsHint">
             This affects fullscreen collection viewing. Images advance by timer when slideshow is enabled. Videos can
-            either wait for the same timer or move to the next asset as soon as playback finishes.
+            either wait for the same timer or move to the next asset as soon as playback finishes. Random mode only
+            affects automatic progression, not your manual left/right navigation.
           </p>
 
           <div className="settingsActions">
@@ -1151,6 +1280,7 @@ function ViewerSettingsSection({
                 setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
                 setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
                 setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
+                setFullscreenSlideshowShuffleAllCollections(config.fullscreenSlideshowShuffleAllCollections)
               }}
             >
               Reset
@@ -1901,6 +2031,7 @@ function FeaturedFullscreenOverlay({
   onClose: () => void
 }) {
   usePageScrollLock(true)
+  const [isMuted, setIsMuted] = useState(muted)
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1918,6 +2049,16 @@ function FeaturedFullscreenOverlay({
       <div className="featuredFullscreenBackdrop" onClick={onClose} />
 
       <div className="featuredFullscreenShell">
+        {mediaType === 'video' ? (
+          <button
+            aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+            className="viewerAudioToggle"
+            type="button"
+            onClick={() => setIsMuted((current) => !current)}
+          >
+            {isMuted ? 'Unmute' : 'Mute'}
+          </button>
+        ) : null}
         <button
           aria-label={`Close featured view for ${collection.displayName}`}
           className="featuredFullscreenClose"
@@ -1935,7 +2076,7 @@ function FeaturedFullscreenOverlay({
               controls={false}
               key={src}
               loop
-              muted={muted}
+              muted={isMuted}
               playsInline
               src={src}
             />
@@ -1950,19 +2091,24 @@ function FeaturedFullscreenOverlay({
 }
 
 function HallFullscreenOverlay({
+  config,
   title,
   src,
   mediaType,
   muted,
+  onNext,
   onClose,
 }: {
+  config: GalleryState['config']
   title: string
   src: string
   mediaType: 'image' | 'video' | null
   muted: boolean
+  onNext: () => void
   onClose: () => void
 }) {
   usePageScrollLock(true)
+  const [isMuted, setIsMuted] = useState(muted)
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1975,6 +2121,29 @@ function HallFullscreenOverlay({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  useEffect(() => {
+    if (!config.fullscreenSlideshowEnabled) {
+      return
+    }
+
+    if (mediaType === 'video' && config.fullscreenVideoAdvanceOnEnded) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      onNext()
+    }, config.fullscreenSlideshowIntervalSeconds * 1000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    config.fullscreenSlideshowEnabled,
+    config.fullscreenSlideshowIntervalSeconds,
+    config.fullscreenVideoAdvanceOnEnded,
+    mediaType,
+    onNext,
+    src,
+  ])
+
   return (
     <div
       className="viewerOverlay hallFullscreenOverlay"
@@ -1984,6 +2153,16 @@ function HallFullscreenOverlay({
     >
       <div className="hallFullscreenBackdrop" onClick={onClose} />
       <div className="hallFullscreenShell">
+        {mediaType === 'video' ? (
+          <button
+            aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+            className="viewerAudioToggle"
+            type="button"
+            onClick={() => setIsMuted((current) => !current)}
+          >
+            {isMuted ? 'Unmute' : 'Mute'}
+          </button>
+        ) : null}
         <button
           aria-label={`Close fullscreen view for ${title}`}
           className="featuredFullscreenClose"
@@ -1993,7 +2172,20 @@ function HallFullscreenOverlay({
 
         <div className="hallFullscreenStage">
           {mediaType === 'video' ? (
-            <video autoPlay className="hallFullscreenMedia" controls={false} loop muted={muted} playsInline src={src} />
+            <video
+              autoPlay
+              className="hallFullscreenMedia"
+              controls={false}
+              loop={!config.fullscreenSlideshowEnabled || !config.fullscreenVideoAdvanceOnEnded}
+              muted={isMuted}
+              onEnded={() => {
+                if (config.fullscreenSlideshowEnabled && config.fullscreenVideoAdvanceOnEnded) {
+                  onNext()
+                }
+              }}
+              playsInline
+              src={src}
+            />
           ) : (
             <img alt={title} className="hallFullscreenMedia" src={src} />
           )}
@@ -2037,38 +2229,51 @@ function CollectionDetailPage() {
   const { galleryState, loading } = useGallery()
   const navigate = useNavigate()
   const collection = galleryState.collections.find((entry) => entry.id === collectionId)
-  const [activeAssetIndex, setActiveAssetIndex] = useState<number | null>(null)
+  const [activeViewerState, setActiveViewerState] = useState<{ collectionId: string; assetIndex: number } | null>(null)
+
+  const viewerCollection =
+    activeViewerState === null
+      ? null
+      : galleryState.collections.find((entry) => entry.id === activeViewerState.collectionId) ?? null
+  const activeAsset =
+    activeViewerState === null || !viewerCollection ? null : viewerCollection.assets[activeViewerState.assetIndex] ?? null
 
   useEffect(() => {
-    if (activeAssetIndex === null || !collection) {
+    if (activeViewerState === null || !viewerCollection) {
       return
     }
 
-    const assetCount = collection.assets.length
+    const assetCount = viewerCollection.assets.length
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setActiveAssetIndex(null)
+        setActiveViewerState(null)
       } else if (event.key === 'ArrowRight') {
-        setActiveAssetIndex((currentIndex) => {
-          if (currentIndex === null) {
-            return currentIndex
+        setActiveViewerState((currentState) => {
+          if (currentState === null) {
+            return currentState
           }
-          return (currentIndex + 1) % assetCount
+          return {
+            ...currentState,
+            assetIndex: (currentState.assetIndex + 1) % assetCount,
+          }
         })
       } else if (event.key === 'ArrowLeft') {
-        setActiveAssetIndex((currentIndex) => {
-          if (currentIndex === null) {
-            return currentIndex
+        setActiveViewerState((currentState) => {
+          if (currentState === null) {
+            return currentState
           }
-          return (currentIndex - 1 + assetCount) % assetCount
+          return {
+            ...currentState,
+            assetIndex: (currentState.assetIndex - 1 + assetCount) % assetCount,
+          }
         })
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeAssetIndex, collection])
+  }, [activeViewerState, viewerCollection])
 
   if (loading && !collection) {
     return (
@@ -2096,7 +2301,36 @@ function CollectionDetailPage() {
   }
 
   const resolvedCollection = collection
-  const activeAsset = activeAssetIndex === null ? null : resolvedCollection.assets[activeAssetIndex]
+
+  function showRandomViewerAsset() {
+    const collectionsWithAssets = galleryState.collections.filter((entry) => entry.assets.length > 0)
+    if (collectionsWithAssets.length === 0) {
+      return
+    }
+
+    setActiveViewerState((currentState) => {
+      const randomCollection = collectionsWithAssets[Math.floor(Math.random() * collectionsWithAssets.length)]
+      const randomAssetIndex = Math.floor(Math.random() * randomCollection.assets.length)
+
+      if (
+        currentState &&
+        collectionsWithAssets.length === 1 &&
+        randomCollection.id === currentState.collectionId &&
+        randomCollection.assets.length > 1 &&
+        randomAssetIndex === currentState.assetIndex
+      ) {
+        return {
+          collectionId: randomCollection.id,
+          assetIndex: (randomAssetIndex + 1) % randomCollection.assets.length,
+        }
+      }
+
+      return {
+        collectionId: randomCollection.id,
+        assetIndex: randomAssetIndex,
+      }
+    })
+  }
 
   return (
     <div className="shell">
@@ -2158,7 +2392,7 @@ function CollectionDetailPage() {
                 <AssetCard
                   asset={asset}
                   key={asset.path}
-                  onOpen={() => setActiveAssetIndex(index)}
+                  onOpen={() => setActiveViewerState({ collectionId: resolvedCollection.id, assetIndex: index })}
                   previewImageUrl={getPreviewImageUrl(asset, resolvedCollection.assets)}
                 />
               ))}
@@ -2170,23 +2404,38 @@ function CollectionDetailPage() {
       {activeAsset ? (
         <FullscreenViewer
           asset={activeAsset}
-          assetIndex={activeAssetIndex ?? 0}
-          collection={resolvedCollection}
+          assetIndex={activeViewerState?.assetIndex ?? 0}
+          collection={viewerCollection ?? resolvedCollection}
           config={galleryState.config}
-          onClose={() => setActiveAssetIndex(null)}
+          onClose={() => setActiveViewerState(null)}
           onNext={() =>
-            setActiveAssetIndex((currentIndex) =>
-              currentIndex === null ? 0 : (currentIndex + 1) % resolvedCollection.assets.length,
+            setActiveViewerState((currentState) =>
+              currentState === null || !viewerCollection
+                ? currentState
+                : {
+                    ...currentState,
+                    assetIndex: (currentState.assetIndex + 1) % viewerCollection.assets.length,
+                  },
             )
           }
           onPrevious={() =>
-            setActiveAssetIndex((currentIndex) =>
-              currentIndex === null
-                ? 0
-                : (currentIndex - 1 + resolvedCollection.assets.length) % resolvedCollection.assets.length,
+            setActiveViewerState((currentState) =>
+              currentState === null || !viewerCollection
+                ? currentState
+                : {
+                    ...currentState,
+                    assetIndex: (currentState.assetIndex - 1 + viewerCollection.assets.length) % viewerCollection.assets.length,
+                  },
             )
           }
-          onSelect={(index) => setActiveAssetIndex(index)}
+          onAutoAdvance={
+            galleryState.config.fullscreenSlideshowShuffleAllCollections ? showRandomViewerAsset : undefined
+          }
+          onSelect={(index) =>
+            setActiveViewerState((currentState) =>
+              currentState === null ? currentState : { ...currentState, assetIndex: index },
+            )
+          }
         />
       ) : null}
     </div>
@@ -2312,6 +2561,7 @@ function FullscreenViewer({
   onClose,
   onNext,
   onPrevious,
+  onAutoAdvance,
   onSelect,
 }: {
   asset: GalleryAsset
@@ -2321,12 +2571,15 @@ function FullscreenViewer({
   onClose: () => void
   onNext: () => void
   onPrevious: () => void
+  onAutoAdvance?: () => void
   onSelect: (index: number) => void
 }) {
   usePageScrollLock(true)
+  const [mutedByAssetPath, setMutedByAssetPath] = useState<Record<string, boolean>>({})
 
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, collection.assets)
+  const isMuted = mutedByAssetPath[asset.path] ?? false
 
   useEffect(() => {
     if (!config.fullscreenSlideshowEnabled) {
@@ -2338,6 +2591,11 @@ function FullscreenViewer({
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (config.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
+        onAutoAdvance()
+        return
+      }
+
       onNext()
     }, config.fullscreenSlideshowIntervalSeconds * 1000)
 
@@ -2348,7 +2606,9 @@ function FullscreenViewer({
     config.fullscreenSlideshowEnabled,
     config.fullscreenSlideshowIntervalSeconds,
     config.fullscreenVideoAdvanceOnEnded,
+    config.fullscreenSlideshowShuffleAllCollections,
     onNext,
+    onAutoAdvance,
   ])
 
   return (
@@ -2357,6 +2617,23 @@ function FullscreenViewer({
 
       <div className="viewerShell">
         <div className="viewerTopLayer">
+          {asset.type === 'video' ? (
+            <button
+              aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+              className="viewerAudioToggle"
+              type="button"
+              onClick={() =>
+                setMutedByAssetPath((current) => ({
+                  ...current,
+                  [asset.path]: !(current[asset.path] ?? false),
+                }))
+              }
+            >
+              {isMuted ? 'Unmute' : 'Mute'}
+            </button>
+          ) : (
+            <div className="viewerActionSpacer" />
+          )}
           <div className="viewerInfoCard">
             <p className="sectionTag">Collection Viewer</p>
             <strong className="viewerTitle">{collection.displayName}</strong>
@@ -2382,9 +2659,15 @@ function FullscreenViewer({
                 loop={!config.fullscreenSlideshowEnabled || !config.fullscreenVideoAdvanceOnEnded}
                 onEnded={() => {
                   if (config.fullscreenSlideshowEnabled && config.fullscreenVideoAdvanceOnEnded) {
+                    if (config.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
+                      onAutoAdvance()
+                      return
+                    }
+
                     onNext()
                   }
                 }}
+                muted={isMuted}
                 playsInline
                 poster={previewImageUrl ?? undefined}
                 src={assetUrl}

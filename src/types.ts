@@ -36,6 +36,7 @@ export type AppConfig = {
   fullscreenSlideshowEnabled: boolean
   fullscreenSlideshowIntervalSeconds: number
   fullscreenVideoAdvanceOnEnded: boolean
+  fullscreenSlideshowShuffleAllCollections: boolean
   collectionsSort: 'id_asc' | 'id_desc'
 }
 

@@ -13,6 +13,7 @@ const defaultConfig = {
   fullscreenSlideshowEnabled: false,
   fullscreenSlideshowIntervalSeconds: 6,
   fullscreenVideoAdvanceOnEnded: true,
+  fullscreenSlideshowShuffleAllCollections: false,
   collectionsSort: 'id_asc',
 }
 
@@ -343,6 +344,10 @@ export async function updateAppConfig(updates) {
 
   if (typeof updates.fullscreenVideoAdvanceOnEnded === 'boolean') {
     nextConfig.fullscreenVideoAdvanceOnEnded = updates.fullscreenVideoAdvanceOnEnded
+  }
+
+  if (typeof updates.fullscreenSlideshowShuffleAllCollections === 'boolean') {
+    nextConfig.fullscreenSlideshowShuffleAllCollections = updates.fullscreenSlideshowShuffleAllCollections
   }
 
   await writeConfig(nextConfig)

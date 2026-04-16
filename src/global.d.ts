@@ -23,6 +23,7 @@ declare global {
         fullscreenSlideshowEnabled?: boolean
         fullscreenSlideshowIntervalSeconds?: number
         fullscreenVideoAdvanceOnEnded?: boolean
+        fullscreenSlideshowShuffleAllCollections?: boolean
       }) => Promise<GalleryState>
       updateCollection: (
         collectionId: string,
