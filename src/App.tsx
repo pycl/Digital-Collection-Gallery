@@ -654,9 +654,11 @@ function HallPage() {
   const [hallFullscreen, setHallFullscreen] = useState(false)
   const hallViewportRef = useRef<HTMLDivElement | null>(null)
   const hallThumbRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const portraitMenuRef = useRef<HTMLDivElement | null>(null)
   const dragStartX = useRef<number | null>(null)
   const wheelLockRef = useRef(false)
   const [autoRotatePaused, setAutoRotatePaused] = useState(false)
+  const [portraitMenuOpen, setPortraitMenuOpen] = useState(false)
 
   function showPrevious() {
     setActiveIndex((currentIndex) =>
@@ -679,6 +681,8 @@ function HallPage() {
   const activeSubtitle =
     activeEntry?.entry.subtitle.trim() || `Collection ${activeEntry?.collection.id ?? '000000'}`
   const activeAssetLabel = activeEntry?.asset ? getAssetDisplayName(activeEntry.asset.name) : ''
+  const activeCardName = activeAssetLabel || activeTitle
+  const activeCollectionName = activeEntry?.collection.displayName || activeSubtitle
   const activePreviewImageUrl =
     activeEntry?.asset ? getPreviewImageUrl(activeEntry.asset, activeEntry.collection.assets) : null
   const activeBackdropUrl = activePreviewImageUrl || (activeEntry?.asset ? toAssetUrl(activeEntry.asset.path) : null)
@@ -817,6 +821,31 @@ function HallPage() {
     })
   }, [resolvedActiveIndex, featuredEntries.length])
 
+  useEffect(() => {
+    if (!portraitMenuOpen) {
+      return
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!portraitMenuRef.current?.contains(event.target as Node)) {
+        setPortraitMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setPortraitMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [portraitMenuOpen])
+
   return (
     <div className="shell hallShell">
       {activeBackdropUrl ? (
@@ -880,6 +909,70 @@ function HallPage() {
               onPointerDown={handlePointerDown}
               onPointerUp={handlePointerUp}
             >
+              {portraitHallLayout ? (
+                <div className="hallPortraitOverlay" ref={portraitMenuRef}>
+                  <button
+                    aria-label="Back to dashboard"
+                    className="hallPortraitBackButton"
+                    type="button"
+                    onClick={() => navigate('/')}
+                  />
+
+                  <div className="hallPortraitMenuWrap">
+                    <button
+                      aria-expanded={portraitMenuOpen}
+                      aria-haspopup="menu"
+                      aria-label="Open hall menu"
+                      className="hallPortraitMenuButton"
+                      type="button"
+                      onClick={() => setPortraitMenuOpen((current) => !current)}
+                    />
+
+                    {portraitMenuOpen ? (
+                      <div className="hallPortraitMenu" role="menu">
+                        <button
+                          className="hallPortraitMenuItem"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => {
+                            setPortraitMenuOpen(false)
+                            navigate('/hall-settings')
+                          }}
+                        >
+                          Hall Settings
+                        </button>
+                        {activeEntry?.asset ? (
+                          <button
+                            className="hallPortraitMenuItem"
+                            role="menuitem"
+                            type="button"
+                            onClick={() => {
+                              setPortraitMenuOpen(false)
+                              setHallFullscreen(true)
+                            }}
+                          >
+                            Expand Media
+                          </button>
+                        ) : null}
+                        {activeEntry ? (
+                          <button
+                            className="hallPortraitMenuItem"
+                            role="menuitem"
+                            type="button"
+                            onClick={() => {
+                              setPortraitMenuOpen(false)
+                              navigate(`/collections/${activeEntry.collection.id}`)
+                            }}
+                          >
+                            Open Collection
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
               <button
                 aria-label="Previous featured card"
                 className="viewerNav hallNavButton hallNavButtonLeft"
@@ -908,26 +1001,40 @@ function HallPage() {
                   ) : null}
 
                   {activeEntry ? (
-                    <button
-                      className="hallFlatHeroCard"
-                      type="button"
-                      onClick={() => {
-                        if (activeEntry.asset) {
-                          setHallFullscreen(true)
-                        }
-                      }}
-                    >
-                      <div className="hallHeroFrame hallFlatHeroFrame">
-                        <div className="hallCardArtwork hallHeroArtwork hallFlatArtwork">
-                          <HallMediaPreview
-                            active
-                            alt={activeTitle}
-                            asset={activeEntry.asset}
-                            assets={activeEntry.collection.assets}
-                          />
+                    <article className="hallFlatHeroCard">
+                      <button
+                        className="hallFlatHeroMediaButton"
+                        type="button"
+                        onClick={() => {
+                          if (activeEntry.asset) {
+                            setHallFullscreen(true)
+                          }
+                        }}
+                      >
+                        <div className="hallHeroFrame hallFlatHeroFrame">
+                          <div className="hallCardArtwork hallHeroArtwork hallFlatArtwork">
+                            <HallMediaPreview
+                              active
+                              alt={activeTitle}
+                              asset={activeEntry.asset}
+                              assets={activeEntry.collection.assets}
+                            />
+                          </div>
                         </div>
+                      </button>
+
+                      <div className="hallFlatHeroMeta">
+                        <span className="hallFlatCode">CD.{activeEntry.collection.id}</span>
+                        <button
+                          className="hallFlatTitleButton"
+                          type="button"
+                          onClick={() => navigate(`/collections/${activeEntry.collection.id}`)}
+                        >
+                          {activeCardName}
+                        </button>
+                        <span className="hallFlatSubtitle">{activeCollectionName}</span>
                       </div>
-                    </button>
+                    </article>
                   ) : null}
 
                   {nextEntry ? (
@@ -1036,7 +1143,7 @@ function HallPage() {
             </div>
           )}
 
-          {activeEntry ? (
+          {activeEntry && !portraitHallLayout ? (
             <div className="hallPortraitMeta">
               <div className="hallPortraitTitleRow">
                 <span className="hallPortraitTitleLine" aria-hidden="true" />
