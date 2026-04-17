@@ -164,6 +164,28 @@ function usePageScrollLock(locked: boolean) {
   }, [locked])
 }
 
+function usePortraitHallLayout() {
+  const [portraitLayout, setPortraitLayout] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+
+    return window.innerWidth <= 980 && window.innerHeight > window.innerWidth
+  })
+
+  useEffect(() => {
+    function updateLayout() {
+      setPortraitLayout(window.innerWidth <= 980 && window.innerHeight > window.innerWidth)
+    }
+
+    updateLayout()
+    window.addEventListener('resize', updateLayout)
+    return () => window.removeEventListener('resize', updateLayout)
+  }, [])
+
+  return portraitLayout
+}
+
 type ResolvedFeaturedEntry = {
   entry: FeaturedEntry
   collection: CollectionRecord
@@ -626,6 +648,7 @@ function HomePage() {
 function HallPage() {
   const { galleryState, error } = useGallery()
   const navigate = useNavigate()
+  const portraitHallLayout = usePortraitHallLayout()
   const featuredEntries = getResolvedFeaturedEntries(galleryState)
   const [activeIndex, setActiveIndex] = useState(0)
   const [hallFullscreen, setHallFullscreen] = useState(false)
@@ -661,6 +684,16 @@ function HallPage() {
   const activeBackdropUrl = activePreviewImageUrl || (activeEntry?.asset ? toAssetUrl(activeEntry.asset.path) : null)
   const activeBackdropVideo =
     activeEntry?.asset?.type === 'video' && !activePreviewImageUrl ? toAssetUrl(activeEntry.asset.path) : null
+  const previousIndex =
+    featuredEntries.length === 0
+      ? null
+      : (resolvedActiveIndex - 1 + featuredEntries.length) % featuredEntries.length
+  const nextIndex =
+    featuredEntries.length === 0 ? null : (resolvedActiveIndex + 1) % featuredEntries.length
+  const previousEntry =
+    previousIndex === null || featuredEntries.length <= 1 ? null : featuredEntries[previousIndex] ?? null
+  const nextEntry =
+    nextIndex === null || featuredEntries.length <= 1 ? null : featuredEntries[nextIndex] ?? null
 
   useEffect(() => {
     if (featuredEntries.length <= 1 || autoRotatePaused || hallFullscreen) {
@@ -855,82 +888,143 @@ function HallPage() {
                 onClick={showPrevious}
               />
 
-              <div className="hallStageOrbit">
-                <div className="hallOrbitTrack" aria-hidden="true" />
-
-                <div className="hallRing">
-                  {featuredEntries.map((featured, index) => {
-                    const offset = getCircularOffset(index, resolvedActiveIndex, featuredEntries.length)
-                    const distance = Math.abs(offset)
-                    const visible = distance > 0 && distance <= 3
-                    if (!visible) {
-                      return null
-                    }
-
-                    return (
-                      <button
-                        className="hallSideCard"
-                        key={featured.entry.id}
-                        style={
-                          {
-                            '--hall-offset': offset,
-                            '--hall-depth': `${Math.max(-160, 120 - distance * 90)}px`,
-                            '--hall-opacity': `${Math.max(0.14, 0.92 - distance * 0.22)}`,
-                            '--hall-scale': `${Math.max(0.58, 0.88 - distance * 0.12)}`,
-                            '--hall-blur': `${Math.max(0.8, distance * 2.4)}px`,
-                            '--hall-y': `${Math.min(72, distance * 22)}px`,
-                            '--hall-z': `${20 - distance}`,
-                          } as CSSProperties
-                        }
-                        type="button"
-                        onClick={() => setActiveIndex(index)}
-                      >
-                        <div className="hallCardArtwork">
-                          <HallMediaPreview
-                            active={false}
-                            alt={featured.entry.title || featured.collection.displayName}
-                            asset={featured.asset}
-                            assets={featured.collection.assets}
-                          />
-                        </div>
-                        <div className="hallCardMeta">
-                          <span className="collectionId">CD.{featured.collection.id}</span>
-                          {featured.asset ? <span>{getAssetDisplayName(featured.asset.name)}</span> : null}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {activeEntry ? (
-                  <button
-                    className="hallHeroCard"
-                    type="button"
-                    onClick={() => {
-                      if (activeEntry.asset) {
-                        setHallFullscreen(true)
-                      }
-                    }}
-                  >
-                    <div className="hallHeroFrame">
-                      <div className="hallCardArtwork hallHeroArtwork">
+              {portraitHallLayout ? (
+                <div className="hallFlatCarousel">
+                  {previousEntry ? (
+                    <button
+                      className="hallFlatSideCard hallFlatSideCardLeft"
+                      type="button"
+                      onClick={() => setActiveIndex(previousIndex ?? 0)}
+                    >
+                      <div className="hallCardArtwork hallFlatArtwork">
                         <HallMediaPreview
-                          active
-                          alt={activeTitle}
-                          asset={activeEntry.asset}
-                          assets={activeEntry.collection.assets}
+                          active={false}
+                          alt={previousEntry.entry.title || previousEntry.collection.displayName}
+                          asset={previousEntry.asset}
+                          assets={previousEntry.collection.assets}
                         />
                       </div>
-                    </div>
-                    <div className="hallHeroMeta">
-                      <span className="collectionId">CD.{activeEntry.collection.id}</span>
-                      {activeAssetLabel ? <span className="hallHeroAssetLabel">{activeAssetLabel}</span> : null}
-                      <strong>{activeTitle}</strong>
-                      <span>{activeSubtitle}</span>
-                    </div>
-                  </button>
-                ) : null}
-              </div>
+                    </button>
+                  ) : null}
+
+                  {activeEntry ? (
+                    <button
+                      className="hallFlatHeroCard"
+                      type="button"
+                      onClick={() => {
+                        if (activeEntry.asset) {
+                          setHallFullscreen(true)
+                        }
+                      }}
+                    >
+                      <div className="hallHeroFrame hallFlatHeroFrame">
+                        <div className="hallCardArtwork hallHeroArtwork hallFlatArtwork">
+                          <HallMediaPreview
+                            active
+                            alt={activeTitle}
+                            asset={activeEntry.asset}
+                            assets={activeEntry.collection.assets}
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  ) : null}
+
+                  {nextEntry ? (
+                    <button
+                      className="hallFlatSideCard hallFlatSideCardRight"
+                      type="button"
+                      onClick={() => setActiveIndex(nextIndex ?? 0)}
+                    >
+                      <div className="hallCardArtwork hallFlatArtwork">
+                        <HallMediaPreview
+                          active={false}
+                          alt={nextEntry.entry.title || nextEntry.collection.displayName}
+                          asset={nextEntry.asset}
+                          assets={nextEntry.collection.assets}
+                        />
+                      </div>
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="hallStageOrbit">
+                  <div className="hallOrbitTrack" aria-hidden="true" />
+
+                  <div className="hallRing">
+                    {featuredEntries.map((featured, index) => {
+                      const offset = getCircularOffset(index, resolvedActiveIndex, featuredEntries.length)
+                      const distance = Math.abs(offset)
+                      const visible = distance > 0 && distance <= 3
+                      if (!visible) {
+                        return null
+                      }
+
+                      return (
+                        <button
+                          className="hallSideCard"
+                          key={featured.entry.id}
+                          style={
+                            {
+                              '--hall-offset': offset,
+                              '--hall-depth': `${Math.max(-160, 120 - distance * 90)}px`,
+                              '--hall-opacity': `${Math.max(0.14, 0.92 - distance * 0.22)}`,
+                              '--hall-scale': `${Math.max(0.58, 0.88 - distance * 0.12)}`,
+                              '--hall-blur': `${Math.max(0.8, distance * 2.4)}px`,
+                              '--hall-y': `${Math.min(72, distance * 22)}px`,
+                              '--hall-z': `${20 - distance}`,
+                            } as CSSProperties
+                          }
+                          type="button"
+                          onClick={() => setActiveIndex(index)}
+                        >
+                          <div className="hallCardArtwork">
+                            <HallMediaPreview
+                              active={false}
+                              alt={featured.entry.title || featured.collection.displayName}
+                              asset={featured.asset}
+                              assets={featured.collection.assets}
+                            />
+                          </div>
+                          <div className="hallCardMeta">
+                            <span className="collectionId">CD.{featured.collection.id}</span>
+                            {featured.asset ? <span>{getAssetDisplayName(featured.asset.name)}</span> : null}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {activeEntry ? (
+                    <button
+                      className="hallHeroCard"
+                      type="button"
+                      onClick={() => {
+                        if (activeEntry.asset) {
+                          setHallFullscreen(true)
+                        }
+                      }}
+                    >
+                      <div className="hallHeroFrame">
+                        <div className="hallCardArtwork hallHeroArtwork">
+                          <HallMediaPreview
+                            active
+                            alt={activeTitle}
+                            asset={activeEntry.asset}
+                            assets={activeEntry.collection.assets}
+                          />
+                        </div>
+                      </div>
+                      <div className="hallHeroMeta">
+                        <span className="collectionId">CD.{activeEntry.collection.id}</span>
+                        {activeAssetLabel ? <span className="hallHeroAssetLabel">{activeAssetLabel}</span> : null}
+                        <strong>{activeTitle}</strong>
+                        <span>{activeSubtitle}</span>
+                      </div>
+                    </button>
+                  ) : null}
+                </div>
+              )}
 
               <button
                 aria-label="Next featured card"
