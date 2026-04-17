@@ -1,7 +1,9 @@
 {
   "name": "digital-collection-gallery",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "本地数字藏品展馆桌面应用。",
+  "author": "pycl <1031069974@qq.com>",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -9,9 +11,49 @@
     "dev:renderer": "vite --host 127.0.0.1 --configLoader native",
     "dev:electron": "wait-on tcp:5173 && set ELECTRON_RENDERER_URL=http://127.0.0.1:5173&& electron .",
     "build": "tsc -b && vite build --configLoader native",
+    "pack": "pnpm run build && electron-builder --dir",
+    "dist:win": "pnpm run build && electron-builder --win nsis",
+    "dist:win-portable": "pnpm run build && electron-builder --win portable",
     "start": "electron .",
     "lint": "eslint .",
     "preview": "vite preview --configLoader native"
+  },
+  "build": {
+    "appId": "com.digitalcollectiongallery.app",
+    "productName": "数字藏品展馆",
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-安装包-${version}.${ext}",
+      "shortcutName": "数字藏品展馆",
+      "uninstallDisplayName": "数字藏品展馆"
+    },
+    "portable": {
+      "artifactName": "${productName}-免安装版-${version}.${ext}"
+    }
   },
   "dependencies": {
     "react": "^19.2.4",
@@ -26,6 +68,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
     "electron": "^37.6.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

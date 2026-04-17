@@ -63,7 +63,7 @@ type GalleryContextValue = {
 const GalleryContext = createContext<GalleryContextValue | null>(null)
 
 function toAssetUrl(assetPath: string) {
-  return `gallery-file://${encodeURI(assetPath.replaceAll('\\', '/'))}`
+  return `gallery-file:///${encodeURI(assetPath.replaceAll('\\', '/'))}`
 }
 
 function App() {

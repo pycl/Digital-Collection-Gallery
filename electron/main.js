@@ -32,6 +32,15 @@ protocol.registerSchemesAsPrivileged([
 
 function decodeGalleryFileUrl(requestUrl) {
   const url = new URL(requestUrl)
+
+  if (url.hostname) {
+    if (/^[A-Za-z]$/.test(url.hostname)) {
+      return `${url.hostname}:${decodeURIComponent(url.pathname)}`
+    }
+
+    return `//${url.hostname}${decodeURIComponent(url.pathname)}`
+  }
+
   let filePath = decodeURIComponent(url.pathname)
 
   if (/^\/[A-Za-z]:\//.test(filePath)) {
