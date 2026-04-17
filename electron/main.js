@@ -50,6 +50,7 @@ function createWindow() {
     title: 'Digital Collection Gallery',
     backgroundColor: '#08111f',
     autoHideMenuBar: true,
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -78,6 +79,25 @@ app.whenReady().then(() => {
 
   ipcMain.handle('app:get-version', () => app.getVersion())
   ipcMain.handle('app:open-external', async (_event, url) => shell.openExternal(url))
+  ipcMain.handle('app:minimize-window', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize()
+  })
+  ipcMain.handle('app:toggle-maximize-window', (event) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender)
+    if (!browserWindow) {
+      return
+    }
+
+    if (browserWindow.isMaximized()) {
+      browserWindow.unmaximize()
+      return
+    }
+
+    browserWindow.maximize()
+  })
+  ipcMain.handle('app:close-window', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close()
+  })
   ipcMain.handle('gallery:get-state', async () => getGalleryState())
   ipcMain.handle('gallery:scan', async () => {
     const config = await readConfig()

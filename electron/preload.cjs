@@ -3,6 +3,9 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('galleryApp', {
   getVersion: () => ipcRenderer.invoke('app:get-version'),
   openExternal: (url) => ipcRenderer.invoke('app:open-external', url),
+  minimizeWindow: () => ipcRenderer.invoke('app:minimize-window'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('app:toggle-maximize-window'),
+  closeWindow: () => ipcRenderer.invoke('app:close-window'),
   getState: () => ipcRenderer.invoke('gallery:get-state'),
   scanCollections: () => ipcRenderer.invoke('gallery:scan'),
   addImportPath: () => ipcRenderer.invoke('gallery:add-import-path'),

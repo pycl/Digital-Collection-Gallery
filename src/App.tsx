@@ -9,7 +9,7 @@
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
-import { HashRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import './App.css'
 import type { CollectionRecord, FeaturedEntry, GalleryAsset, GalleryState } from './types'
 
@@ -66,6 +66,21 @@ function App() {
   return (
     <HashRouter>
       <GalleryProvider>
+        <AppFrame />
+      </GalleryProvider>
+    </HashRouter>
+  )
+}
+
+function AppFrame() {
+  const location = useLocation()
+  const portraitHallLayout = usePortraitHallLayout()
+  const hideWindowChrome = location.pathname === '/hall' && portraitHallLayout
+
+  return (
+    <div className={`windowFrame ${hideWindowChrome ? 'windowFrameChromeHidden' : ''}`}>
+      {!hideWindowChrome ? <WindowChrome /> : null}
+      <div className={`windowViewport ${hideWindowChrome ? 'windowViewportChromeHidden' : ''}`}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/hall" element={<HallPage />} />
@@ -74,8 +89,66 @@ function App() {
           <Route path="/collections/:collectionId" element={<CollectionDetailPage />} />
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>
-      </GalleryProvider>
-    </HashRouter>
+      </div>
+    </div>
+  )
+}
+
+function WindowChrome() {
+  const location = useLocation()
+  const immersiveChrome = location.pathname === '/hall' || location.pathname.startsWith('/collections/')
+  const routeLabel =
+    location.pathname === '/'
+      ? 'Dashboard'
+      : location.pathname === '/hall'
+        ? 'Hall'
+        : location.pathname === '/hall-settings'
+          ? 'Hall Settings'
+          : location.pathname === '/settings'
+            ? 'Settings'
+            : location.pathname.startsWith('/collections/')
+              ? 'Collection'
+              : 'Gallery'
+
+  return (
+    <div className={`windowChrome ${immersiveChrome ? 'windowChromeImmersive' : ''}`}>
+      <div className="windowChromeInner">
+        <div className="windowChromeBrand">
+          <span aria-hidden="true" className="windowChromeMark" />
+          <div className="windowChromeText">
+            <strong>Digital Collection Gallery</strong>
+            <span>{routeLabel}</span>
+          </div>
+        </div>
+
+        <div className="windowChromeControls">
+          <button
+            aria-label="Minimize window"
+            className="windowChromeControl"
+            type="button"
+            onClick={() => void window.galleryApp.minimizeWindow()}
+          >
+            <span className="windowChromeGlyph windowChromeGlyphMinimize" />
+          </button>
+          <button
+            aria-label="Maximize or restore window"
+            className="windowChromeControl"
+            type="button"
+            onClick={() => void window.galleryApp.toggleMaximizeWindow()}
+          >
+            <span className="windowChromeGlyph windowChromeGlyphMaximize" />
+          </button>
+          <button
+            aria-label="Close window"
+            className="windowChromeControl windowChromeControlClose"
+            type="button"
+            onClick={() => void window.galleryApp.closeWindow()}
+          >
+            <span className="windowChromeGlyph windowChromeGlyphClose" />
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -659,8 +732,12 @@ function HallPage() {
   const wheelLockRef = useRef(false)
   const [autoRotatePaused, setAutoRotatePaused] = useState(false)
   const [portraitMenuOpen, setPortraitMenuOpen] = useState(false)
+  const [hallTransitionDirection, setHallTransitionDirection] = useState<'forward' | 'backward'>('forward')
+  const [hallTransitionTick, setHallTransitionTick] = useState(0)
 
   function showPrevious() {
+    setHallTransitionDirection('backward')
+    setHallTransitionTick((current) => current + 1)
     setActiveIndex((currentIndex) =>
       featuredEntries.length === 0
         ? 0
@@ -669,6 +746,8 @@ function HallPage() {
   }
 
   function showNext() {
+    setHallTransitionDirection('forward')
+    setHallTransitionTick((current) => current + 1)
     setActiveIndex((currentIndex) =>
       featuredEntries.length === 0 ? 0 : (currentIndex + 1) % featuredEntries.length,
     )
@@ -698,6 +777,8 @@ function HallPage() {
     previousIndex === null || featuredEntries.length <= 1 ? null : featuredEntries[previousIndex] ?? null
   const nextEntry =
     nextIndex === null || featuredEntries.length <= 1 ? null : featuredEntries[nextIndex] ?? null
+  const hallTransitionClass =
+    hallTransitionDirection === 'backward' ? 'hallTransitionBackward' : 'hallTransitionForward'
 
   useEffect(() => {
     if (featuredEntries.length <= 1 || autoRotatePaused || hallFullscreen) {
@@ -982,10 +1063,11 @@ function HallPage() {
               />
 
               {portraitHallLayout ? (
-                <div className="hallFlatCarousel">
+                <div className={`hallFlatCarousel ${hallTransitionClass}`}>
                   {previousEntry ? (
                     <button
-                      className="hallFlatSideCard hallFlatSideCardLeft"
+                      className={`hallFlatSideCard hallFlatSideCardLeft ${hallTransitionClass}`}
+                      key={`flat-prev-${previousEntry.entry.id}-${hallTransitionTick}`}
                       type="button"
                       onClick={() => setActiveIndex(previousIndex ?? 0)}
                     >
@@ -1001,7 +1083,10 @@ function HallPage() {
                   ) : null}
 
                   {activeEntry ? (
-                    <article className="hallFlatHeroCard">
+                    <article
+                      className={`hallFlatHeroCard ${hallTransitionClass}`}
+                      key={`flat-hero-${activeEntry.entry.id}-${hallTransitionTick}`}
+                    >
                       <button
                         className="hallFlatHeroMediaButton"
                         type="button"
@@ -1039,7 +1124,8 @@ function HallPage() {
 
                   {nextEntry ? (
                     <button
-                      className="hallFlatSideCard hallFlatSideCardRight"
+                      className={`hallFlatSideCard hallFlatSideCardRight ${hallTransitionClass}`}
+                      key={`flat-next-${nextEntry.entry.id}-${hallTransitionTick}`}
                       type="button"
                       onClick={() => setActiveIndex(nextIndex ?? 0)}
                     >
@@ -1055,7 +1141,7 @@ function HallPage() {
                   ) : null}
                 </div>
               ) : (
-                <div className="hallStageOrbit">
+                <div className={`hallStageOrbit ${hallTransitionClass}`}>
                   <div className="hallOrbitTrack" aria-hidden="true" />
 
                   <div className="hallRing">
@@ -1104,7 +1190,8 @@ function HallPage() {
 
                   {activeEntry ? (
                     <button
-                      className="hallHeroCard"
+                      className={`hallHeroCard hallHeroCardAnimated ${hallTransitionClass}`}
+                      key={`hero-${activeEntry.entry.id}-${hallTransitionTick}`}
                       type="button"
                       onClick={() => {
                         if (activeEntry.asset) {

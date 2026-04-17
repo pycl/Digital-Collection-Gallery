@@ -5,6 +5,9 @@ declare global {
     galleryApp: {
       getVersion: () => Promise<string>
       openExternal: (url: string) => Promise<void>
+      minimizeWindow: () => Promise<void>
+      toggleMaximizeWindow: () => Promise<void>
+      closeWindow: () => Promise<void>
       getState: () => Promise<GalleryState>
       scanCollections: () => Promise<GalleryState>
       addImportPath: () => Promise<GalleryState>
