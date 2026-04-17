@@ -1,5 +1,6 @@
 ﻿import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -318,9 +319,29 @@ function getCircularOffset(index: number, activeIndex: number, length: number) {
   )
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
 function getAssetDisplayName(assetName: string) {
   const withoutExtension = assetName.replace(/\.[^.]+$/, '')
   return withoutExtension.replace(/^\d+[\s._-]*/, '')
+}
+
+function getFeaturedEntryDisplay(entry: ResolvedFeaturedEntry | null) {
+  const title = entry?.entry.title.trim() || entry?.collection.displayName || 'No active entry'
+  const subtitle = entry?.entry.subtitle.trim() || `Collection ${entry?.collection.id ?? '000000'}`
+  const assetLabel = entry?.asset ? getAssetDisplayName(entry.asset.name) : ''
+  const cardName = assetLabel || title
+  const collectionName = entry?.collection.displayName || subtitle
+
+  return {
+    title,
+    subtitle,
+    assetLabel,
+    cardName,
+    collectionName,
+  }
 }
 
 function FeaturedBannerMedia({
@@ -427,16 +448,21 @@ function HallMediaPreview({
 
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, assets)
+  const imageProps = {
+    alt,
+    draggable: false,
+    onDragStart: (event: ReactDragEvent<HTMLImageElement>) => event.preventDefault(),
+  }
 
   if (asset.type === 'video') {
     if (active || !previewImageUrl) {
       return <video autoPlay loop muted playsInline preload="metadata" src={assetUrl} />
     }
 
-    return <img alt={alt} src={previewImageUrl} />
+    return <img {...imageProps} src={previewImageUrl} />
   }
 
-  return <img alt={alt} src={assetUrl} />
+  return <img {...imageProps} src={assetUrl} />
 }
 
 function HomePage() {
@@ -728,40 +754,46 @@ function HallPage() {
   const hallViewportRef = useRef<HTMLDivElement | null>(null)
   const hallThumbRefs = useRef<Array<HTMLButtonElement | null>>([])
   const portraitMenuRef = useRef<HTMLDivElement | null>(null)
+  const hallTransitionKeyRef = useRef(0)
+  const activePointerIdRef = useRef<number | null>(null)
+  const hallTransitionSourceRef = useRef<{
+    entry: ResolvedFeaturedEntry | null
+    backdropUrl: string | null
+    backdropVideo: string | null
+    featuredCount: number
+  }>({
+    entry: null,
+    backdropUrl: null,
+    backdropVideo: null,
+    featuredCount: 0,
+  })
   const dragStartX = useRef<number | null>(null)
+  const dragSuppressClickRef = useRef(false)
   const wheelLockRef = useRef(false)
   const [autoRotatePaused, setAutoRotatePaused] = useState(false)
   const [portraitMenuOpen, setPortraitMenuOpen] = useState(false)
+  const [hallDragOffset, setHallDragOffset] = useState(0)
+  const [hallDragging, setHallDragging] = useState(false)
   const [hallTransitionDirection, setHallTransitionDirection] = useState<'forward' | 'backward'>('forward')
   const [hallTransitionTick, setHallTransitionTick] = useState(0)
-
-  function showPrevious() {
-    setHallTransitionDirection('backward')
-    setHallTransitionTick((current) => current + 1)
-    setActiveIndex((currentIndex) =>
-      featuredEntries.length === 0
-        ? 0
-        : (currentIndex - 1 + featuredEntries.length) % featuredEntries.length,
-    )
-  }
-
-  function showNext() {
-    setHallTransitionDirection('forward')
-    setHallTransitionTick((current) => current + 1)
-    setActiveIndex((currentIndex) =>
-      featuredEntries.length === 0 ? 0 : (currentIndex + 1) % featuredEntries.length,
-    )
-  }
+  const [hallTransitionSnapshot, setHallTransitionSnapshot] = useState<{
+    key: number
+    direction: 'forward' | 'backward'
+    entry: ResolvedFeaturedEntry | null
+    backdropUrl: string | null
+    backdropVideo: string | null
+  } | null>(null)
 
   const resolvedActiveIndex =
     featuredEntries.length === 0 ? 0 : Math.min(activeIndex, featuredEntries.length - 1)
   const activeEntry = featuredEntries[resolvedActiveIndex] ?? null
-  const activeTitle = activeEntry?.entry.title.trim() || activeEntry?.collection.displayName || 'No active entry'
-  const activeSubtitle =
-    activeEntry?.entry.subtitle.trim() || `Collection ${activeEntry?.collection.id ?? '000000'}`
-  const activeAssetLabel = activeEntry?.asset ? getAssetDisplayName(activeEntry.asset.name) : ''
-  const activeCardName = activeAssetLabel || activeTitle
-  const activeCollectionName = activeEntry?.collection.displayName || activeSubtitle
+  const {
+    title: activeTitle,
+    subtitle: activeSubtitle,
+    assetLabel: activeAssetLabel,
+    cardName: activeCardName,
+    collectionName: activeCollectionName,
+  } = getFeaturedEntryDisplay(activeEntry)
   const activePreviewImageUrl =
     activeEntry?.asset ? getPreviewImageUrl(activeEntry.asset, activeEntry.collection.assets) : null
   const activeBackdropUrl = activePreviewImageUrl || (activeEntry?.asset ? toAssetUrl(activeEntry.asset.path) : null)
@@ -779,6 +811,84 @@ function HallPage() {
     nextIndex === null || featuredEntries.length <= 1 ? null : featuredEntries[nextIndex] ?? null
   const hallTransitionClass =
     hallTransitionDirection === 'backward' ? 'hallTransitionBackward' : 'hallTransitionForward'
+  const hallDragRange = portraitHallLayout ? 148 : 220
+  const hallDragProgress = clampNumber(hallDragOffset / hallDragRange, -1, 1)
+  const hallDragAbsProgress = Math.abs(hallDragProgress)
+  const hallDragForwardProgress = Math.max(0, -hallDragProgress)
+  const hallDragBackwardProgress = Math.max(0, hallDragProgress)
+  const {
+    title: transitionTitle,
+    cardName: transitionCardName,
+    collectionName: transitionCollectionName,
+  } = getFeaturedEntryDisplay(hallTransitionSnapshot?.entry ?? null)
+
+  const commitHallTransition = useCallback((direction: 'forward' | 'backward', nextIndex: number) => {
+    const {
+      entry,
+      backdropUrl,
+      backdropVideo,
+      featuredCount,
+    } = hallTransitionSourceRef.current
+
+    if (featuredCount === 0) {
+      return
+    }
+
+    const nextKey = hallTransitionKeyRef.current + 1
+    hallTransitionKeyRef.current = nextKey
+
+    setHallDragging(false)
+    setHallDragOffset(0)
+    setHallTransitionDirection(direction)
+    setHallTransitionTick(nextKey)
+    setHallTransitionSnapshot({
+      key: nextKey,
+      direction,
+      entry,
+      backdropUrl,
+      backdropVideo,
+    })
+    setActiveIndex(nextIndex)
+  }, [
+    setActiveIndex,
+    setHallDragOffset,
+    setHallDragging,
+    setHallTransitionDirection,
+    setHallTransitionSnapshot,
+    setHallTransitionTick,
+  ])
+
+  const showPrevious = useCallback(() => {
+    const nextIndex =
+      featuredEntries.length === 0
+        ? 0
+        : (resolvedActiveIndex - 1 + featuredEntries.length) % featuredEntries.length
+    commitHallTransition('backward', nextIndex)
+  }, [commitHallTransition, featuredEntries.length, resolvedActiveIndex])
+
+  const showNext = useCallback(() => {
+    const nextIndex =
+      featuredEntries.length === 0 ? 0 : (resolvedActiveIndex + 1) % featuredEntries.length
+    commitHallTransition('forward', nextIndex)
+  }, [commitHallTransition, featuredEntries.length, resolvedActiveIndex])
+
+  useEffect(() => {
+    hallTransitionSourceRef.current = {
+      entry: activeEntry,
+      backdropUrl: activeBackdropUrl,
+      backdropVideo: activeBackdropVideo,
+      featuredCount: featuredEntries.length,
+    }
+  }, [activeBackdropUrl, activeBackdropVideo, activeEntry, featuredEntries.length])
+
+  function jumpToIndex(nextIndex: number) {
+    if (featuredEntries.length === 0 || nextIndex === resolvedActiveIndex) {
+      return
+    }
+
+    const offset = getCircularOffset(nextIndex, resolvedActiveIndex, featuredEntries.length)
+    commitHallTransition(offset < 0 ? 'backward' : 'forward', nextIndex)
+  }
 
   useEffect(() => {
     if (featuredEntries.length <= 1 || autoRotatePaused || hallFullscreen) {
@@ -786,7 +896,7 @@ function HallPage() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      setActiveIndex((currentIndex) => (currentIndex + 1) % featuredEntries.length)
+      showNext()
     }, galleryState.config.bannerIntervalSeconds * 1000)
 
     return () => window.clearTimeout(timeoutId)
@@ -796,22 +906,17 @@ function HallPage() {
     featuredEntries.length,
     galleryState.config.bannerIntervalSeconds,
     hallFullscreen,
+    showNext,
   ])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'ArrowLeft') {
         event.preventDefault()
-        setActiveIndex((currentIndex) =>
-          featuredEntries.length === 0
-            ? 0
-            : (currentIndex - 1 + featuredEntries.length) % featuredEntries.length,
-        )
+        showPrevious()
       } else if (event.key === 'ArrowRight') {
         event.preventDefault()
-        setActiveIndex((currentIndex) =>
-          featuredEntries.length === 0 ? 0 : (currentIndex + 1) % featuredEntries.length,
-        )
+        showNext()
       } else if (event.key === 'Enter' && activeEntry) {
         setHallFullscreen(true)
       }
@@ -819,31 +924,94 @@ function HallPage() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeEntry, featuredEntries.length])
+  }, [activeEntry, showNext, showPrevious])
 
   function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.button !== 0 || featuredEntries.length <= 1) {
+      return
+    }
+
+    const target = event.target as HTMLElement | null
+    if (target?.closest('.hallPortraitOverlay, .viewerNav')) {
+      return
+    }
+
+    activePointerIdRef.current = event.pointerId
     dragStartX.current = event.clientX
+    dragSuppressClickRef.current = false
+    setHallDragging(false)
+    setHallDragOffset(0)
+    event.currentTarget.setPointerCapture(event.pointerId)
     setAutoRotatePaused(true)
   }
 
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (dragStartX.current === null || activePointerIdRef.current !== event.pointerId) {
+      return
+    }
+
+    const nextOffset = clampNumber(event.clientX - dragStartX.current, -hallDragRange, hallDragRange)
+    if (Math.abs(nextOffset) > 8) {
+      dragSuppressClickRef.current = true
+      setHallDragging(true)
+    }
+
+    setHallDragOffset(nextOffset)
+  }
+
   function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
-    if (dragStartX.current === null) {
+    if (dragStartX.current === null || activePointerIdRef.current !== event.pointerId) {
       return
     }
 
     const deltaX = event.clientX - dragStartX.current
     dragStartX.current = null
+    activePointerIdRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    setHallDragging(false)
+    setHallDragOffset(0)
 
     if (Math.abs(deltaX) < 56) {
+      if (dragSuppressClickRef.current) {
+        window.setTimeout(() => {
+          dragSuppressClickRef.current = false
+        }, 0)
+      }
       return
     }
 
     if (deltaX > 0) {
       showPrevious()
+      window.setTimeout(() => {
+        dragSuppressClickRef.current = false
+      }, 0)
       return
     }
 
     showNext()
+    window.setTimeout(() => {
+      dragSuppressClickRef.current = false
+    }, 0)
+  }
+
+  function handlePointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    if (activePointerIdRef.current !== event.pointerId) {
+      return
+    }
+
+    dragStartX.current = null
+    activePointerIdRef.current = null
+    setHallDragging(false)
+    setHallDragOffset(0)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    window.setTimeout(() => {
+      dragSuppressClickRef.current = false
+    }, 0)
   }
 
   useEffect(() => {
@@ -872,22 +1040,16 @@ function HallPage() {
 
       setAutoRotatePaused(true)
       if (axisDelta > 0) {
-        setActiveIndex((currentIndex) =>
-          featuredEntries.length === 0 ? 0 : (currentIndex + 1) % featuredEntries.length,
-        )
+        showNext()
         return
       }
 
-      setActiveIndex((currentIndex) =>
-        featuredEntries.length === 0
-          ? 0
-          : (currentIndex - 1 + featuredEntries.length) % featuredEntries.length,
-      )
+      showPrevious()
     }
 
     viewport.addEventListener('wheel', handleViewportWheel, { passive: false })
     return () => viewport.removeEventListener('wheel', handleViewportWheel)
-  }, [featuredEntries.length])
+  }, [featuredEntries.length, showNext, showPrevious])
 
   useEffect(() => {
     const activeThumb = hallThumbRefs.current[resolvedActiveIndex]
@@ -901,6 +1063,20 @@ function HallPage() {
       inline: 'center',
     })
   }, [resolvedActiveIndex, featuredEntries.length])
+
+  useEffect(() => {
+    if (!hallTransitionSnapshot) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setHallTransitionSnapshot((current) =>
+        current?.key === hallTransitionSnapshot.key ? null : current,
+      )
+    }, 420)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [hallTransitionSnapshot])
 
   useEffect(() => {
     if (!portraitMenuOpen) {
@@ -935,6 +1111,23 @@ function HallPage() {
             <video autoPlay loop muted playsInline preload="metadata" src={activeBackdropVideo} />
           ) : (
             <img alt="" src={activeBackdropUrl} />
+          )}
+        </div>
+      ) : null}
+      {hallTransitionSnapshot?.backdropUrl ? (
+        <div
+          aria-hidden="true"
+          className={`hallBackdrop hallBackdropLeaving ${
+            hallTransitionSnapshot.direction === 'backward'
+              ? 'hallTransitionBackward'
+              : 'hallTransitionForward'
+          }`}
+          key={`backdrop-${hallTransitionSnapshot.key}`}
+        >
+          {hallTransitionSnapshot.backdropVideo ? (
+            <video autoPlay loop muted playsInline preload="metadata" src={hallTransitionSnapshot.backdropVideo} />
+          ) : (
+            <img alt="" src={hallTransitionSnapshot.backdropUrl} />
           )}
         </div>
       ) : null}
@@ -982,12 +1175,17 @@ function HallPage() {
               className="hallViewport"
               ref={hallViewportRef}
               onBlurCapture={() => setAutoRotatePaused(false)}
+              onClickCapture={(event) => {
+                if (dragSuppressClickRef.current) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }
+              }}
               onMouseEnter={() => setAutoRotatePaused(true)}
               onMouseLeave={() => setAutoRotatePaused(false)}
-              onPointerCancel={() => {
-                dragStartX.current = null
-              }}
+              onPointerCancel={handlePointerCancel}
               onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
             >
               {portraitHallLayout ? (
@@ -1063,13 +1261,51 @@ function HallPage() {
               />
 
               {portraitHallLayout ? (
-                <div className={`hallFlatCarousel ${hallTransitionClass}`}>
+                <div
+                  className={`hallFlatCarousel ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''}`}
+                  style={
+                    {
+                      '--hall-drag-progress': `${hallDragProgress}`,
+                      '--hall-drag-abs': `${hallDragAbsProgress}`,
+                      '--hall-drag-forward': `${hallDragForwardProgress}`,
+                      '--hall-drag-backward': `${hallDragBackwardProgress}`,
+                    } as CSSProperties
+                  }
+                >
+                  {hallTransitionSnapshot?.entry ? (
+                    <article
+                      className={`hallFlatHeroCard hallFlatHeroCardLeaving ${
+                        hallTransitionSnapshot.direction === 'backward'
+                          ? 'hallTransitionBackward'
+                          : 'hallTransitionForward'
+                      }`}
+                      key={`flat-leaving-${hallTransitionSnapshot.key}`}
+                    >
+                      <div className="hallHeroFrame hallFlatHeroFrame">
+                        <div className="hallCardArtwork hallHeroArtwork hallFlatArtwork">
+                          <HallMediaPreview
+                            active={false}
+                            alt={transitionTitle}
+                            asset={hallTransitionSnapshot.entry.asset}
+                            assets={hallTransitionSnapshot.entry.collection.assets}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="hallFlatHeroMeta">
+                        <span className="hallFlatCode">CD.{hallTransitionSnapshot.entry.collection.id}</span>
+                        <span className="hallFlatTitleButton hallFlatTitleStatic">{transitionCardName}</span>
+                        <span className="hallFlatSubtitle">{transitionCollectionName}</span>
+                      </div>
+                    </article>
+                  ) : null}
+
                   {previousEntry ? (
                     <button
                       className={`hallFlatSideCard hallFlatSideCardLeft ${hallTransitionClass}`}
                       key={`flat-prev-${previousEntry.entry.id}-${hallTransitionTick}`}
                       type="button"
-                      onClick={() => setActiveIndex(previousIndex ?? 0)}
+                      onClick={() => jumpToIndex(previousIndex ?? 0)}
                     >
                       <div className="hallCardArtwork hallFlatArtwork">
                         <HallMediaPreview
@@ -1084,7 +1320,7 @@ function HallPage() {
 
                   {activeEntry ? (
                     <article
-                      className={`hallFlatHeroCard ${hallTransitionClass}`}
+                      className={`hallFlatHeroCard ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''}`}
                       key={`flat-hero-${activeEntry.entry.id}-${hallTransitionTick}`}
                     >
                       <button
@@ -1127,7 +1363,7 @@ function HallPage() {
                       className={`hallFlatSideCard hallFlatSideCardRight ${hallTransitionClass}`}
                       key={`flat-next-${nextEntry.entry.id}-${hallTransitionTick}`}
                       type="button"
-                      onClick={() => setActiveIndex(nextIndex ?? 0)}
+                      onClick={() => jumpToIndex(nextIndex ?? 0)}
                     >
                       <div className="hallCardArtwork hallFlatArtwork">
                         <HallMediaPreview
@@ -1141,7 +1377,15 @@ function HallPage() {
                   ) : null}
                 </div>
               ) : (
-                <div className={`hallStageOrbit ${hallTransitionClass}`}>
+                <div
+                  className={`hallStageOrbit ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''}`}
+                  style={
+                    {
+                      '--hall-drag-progress': `${hallDragProgress}`,
+                      '--hall-drag-abs': `${hallDragAbsProgress}`,
+                    } as CSSProperties
+                  }
+                >
                   <div className="hallOrbitTrack" aria-hidden="true" />
 
                   <div className="hallRing">
@@ -1153,23 +1397,52 @@ function HallPage() {
                         return null
                       }
 
+                      const dragApproachProgress =
+                        offset < 0 ? hallDragBackwardProgress : hallDragForwardProgress
+                      const dragRetreatProgress =
+                        offset < 0 ? hallDragForwardProgress : hallDragBackwardProgress
+                      const dragAdjustedOffset = offset + hallDragProgress * 0.82
+                      const dragAdjustedDistance = Math.abs(dragAdjustedOffset)
+                      const dragAdjustedOpacity = clampNumber(
+                        0.92 - distance * 0.22 + dragApproachProgress * 0.18 - dragRetreatProgress * 0.08,
+                        0.14,
+                        0.96,
+                      )
+                      const dragAdjustedScale = clampNumber(
+                        0.88 - distance * 0.12 + dragApproachProgress * 0.08 - dragRetreatProgress * 0.03,
+                        0.58,
+                        0.98,
+                      )
+                      const dragAdjustedBlur = clampNumber(
+                        distance * 2.4 - dragApproachProgress * 1.9 + dragRetreatProgress * 0.8,
+                        0.4,
+                        7.2,
+                      )
+                      const dragAdjustedY = clampNumber(
+                        distance * 22 - dragApproachProgress * 14 + dragRetreatProgress * 8,
+                        0,
+                        72,
+                      )
+                      const dragAdjustedDepth = clampNumber(120 - dragAdjustedDistance * 90, -160, 120)
+                      const dragAdjustedZ = Math.max(20 - dragAdjustedDistance, 12)
+
                       return (
                         <button
                           className="hallSideCard"
                           key={featured.entry.id}
                           style={
                             {
-                              '--hall-offset': offset,
-                              '--hall-depth': `${Math.max(-160, 120 - distance * 90)}px`,
-                              '--hall-opacity': `${Math.max(0.14, 0.92 - distance * 0.22)}`,
-                              '--hall-scale': `${Math.max(0.58, 0.88 - distance * 0.12)}`,
-                              '--hall-blur': `${Math.max(0.8, distance * 2.4)}px`,
-                              '--hall-y': `${Math.min(72, distance * 22)}px`,
-                              '--hall-z': `${20 - distance}`,
+                              '--hall-offset': `${dragAdjustedOffset}`,
+                              '--hall-depth': `${dragAdjustedDepth}px`,
+                              '--hall-opacity': `${dragAdjustedOpacity}`,
+                              '--hall-scale': `${dragAdjustedScale}`,
+                              '--hall-blur': `${dragAdjustedBlur}px`,
+                              '--hall-y': `${dragAdjustedY}px`,
+                              '--hall-z': `${dragAdjustedZ}`,
                             } as CSSProperties
                           }
                           type="button"
-                          onClick={() => setActiveIndex(index)}
+                          onClick={() => jumpToIndex(index)}
                         >
                           <div className="hallCardArtwork">
                             <HallMediaPreview
@@ -1189,33 +1462,67 @@ function HallPage() {
                   </div>
 
                   {activeEntry ? (
-                    <button
-                      className={`hallHeroCard hallHeroCardAnimated ${hallTransitionClass}`}
-                      key={`hero-${activeEntry.entry.id}-${hallTransitionTick}`}
-                      type="button"
-                      onClick={() => {
-                        if (activeEntry.asset) {
-                          setHallFullscreen(true)
-                        }
-                      }}
-                    >
-                      <div className="hallHeroFrame">
-                        <div className="hallCardArtwork hallHeroArtwork">
-                          <HallMediaPreview
-                            active
-                            alt={activeTitle}
-                            asset={activeEntry.asset}
-                            assets={activeEntry.collection.assets}
-                          />
+                    <>
+                      {hallTransitionSnapshot?.entry ? (
+                        <div
+                          className={`hallHeroCard hallHeroCardLeaving ${
+                            hallTransitionSnapshot.direction === 'backward'
+                              ? 'hallTransitionBackward'
+                              : 'hallTransitionForward'
+                          }`}
+                          key={`hero-leaving-${hallTransitionSnapshot.key}`}
+                        >
+                          <div className="hallHeroFrame">
+                            <div className="hallCardArtwork hallHeroArtwork">
+                              <HallMediaPreview
+                                active={false}
+                                alt={transitionTitle}
+                                asset={hallTransitionSnapshot.entry.asset}
+                                assets={hallTransitionSnapshot.entry.collection.assets}
+                              />
+                            </div>
+                          </div>
+                          <div className="hallHeroMeta">
+                            <span className="collectionId">CD.{hallTransitionSnapshot.entry.collection.id}</span>
+                            {hallTransitionSnapshot.entry.asset ? (
+                              <span className="hallHeroAssetLabel">
+                                {getAssetDisplayName(hallTransitionSnapshot.entry.asset.name)}
+                              </span>
+                            ) : null}
+                            <strong>{transitionTitle}</strong>
+                            <span>{getFeaturedEntryDisplay(hallTransitionSnapshot.entry).subtitle}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="hallHeroMeta">
-                        <span className="collectionId">CD.{activeEntry.collection.id}</span>
-                        {activeAssetLabel ? <span className="hallHeroAssetLabel">{activeAssetLabel}</span> : null}
-                        <strong>{activeTitle}</strong>
-                        <span>{activeSubtitle}</span>
-                      </div>
-                    </button>
+                      ) : null}
+
+                      <button
+                        className={`hallHeroCard hallHeroCardAnimated ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''}`}
+                        key={`hero-${activeEntry.entry.id}-${hallTransitionTick}`}
+                        type="button"
+                        onClick={() => {
+                          if (activeEntry.asset) {
+                            setHallFullscreen(true)
+                          }
+                        }}
+                      >
+                        <div className="hallHeroFrame">
+                          <div className="hallCardArtwork hallHeroArtwork">
+                            <HallMediaPreview
+                              active
+                              alt={activeTitle}
+                              asset={activeEntry.asset}
+                              assets={activeEntry.collection.assets}
+                            />
+                          </div>
+                        </div>
+                        <div className="hallHeroMeta">
+                          <span className="collectionId">CD.{activeEntry.collection.id}</span>
+                          {activeAssetLabel ? <span className="hallHeroAssetLabel">{activeAssetLabel}</span> : null}
+                          <strong>{activeTitle}</strong>
+                          <span>{activeSubtitle}</span>
+                        </div>
+                      </button>
+                    </>
                   ) : null}
                 </div>
               )}
@@ -1265,8 +1572,8 @@ function HallPage() {
                         hallThumbRefs.current[index] = node
                       }}
                       type="button"
-                      onClick={() => setActiveIndex(index)}
-                    >
+                          onClick={() => jumpToIndex(index)}
+                        >
                       <div className="hallEntryThumbMedia">
                         {thumbUrl ? (
                           <img alt={featured.entry.title || featured.collection.displayName} src={thumbUrl} />
