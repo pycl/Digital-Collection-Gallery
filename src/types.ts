@@ -31,6 +31,7 @@ export type CollectionRecord = {
 export type AppConfig = {
   importPaths: string[]
   featuredEntries: FeaturedEntry[]
+  uiScale: number
   bannerIntervalSeconds: number
   bannerVideoMuted: boolean
   fullscreenSlideshowEnabled: boolean

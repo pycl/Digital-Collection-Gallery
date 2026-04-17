@@ -63,6 +63,10 @@ function createWindow() {
     console.error(`Renderer failed to load (${code}): ${description} -> ${url}`)
   })
 
+  void readConfig().then((config) => {
+    mainWindow.webContents.setZoomFactor(config.uiScale ?? 1)
+  })
+
   if (rendererUrl) {
     mainWindow.loadURL(rendererUrl)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
@@ -158,6 +162,7 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('gallery:update-config', async (_event, updates) => {
     const config = await updateAppConfig(updates)
+    BrowserWindow.fromWebContents(_event.sender)?.webContents.setZoomFactor(config.uiScale ?? 1)
     const collectionMap = await scanCollections(config.importPaths)
     return {
       config,

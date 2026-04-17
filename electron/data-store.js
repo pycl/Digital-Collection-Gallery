@@ -8,6 +8,7 @@ const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.m4v'])
 const defaultConfig = {
   importPaths: [],
   featuredEntries: [],
+  uiScale: 1,
   bannerIntervalSeconds: 8,
   bannerVideoMuted: true,
   fullscreenSlideshowEnabled: false,
@@ -56,6 +57,14 @@ function getCollectionsPath() {
   return path.join(getDataDir(), 'collections.json')
 }
 
+function normalizeUiScale(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return defaultConfig.uiScale
+  }
+
+  return Math.min(1.25, Math.max(0.75, Math.round(value * 100) / 100))
+}
+
 async function ensureDataDir() {
   await fs.mkdir(getDataDir(), { recursive: true })
 }
@@ -100,6 +109,7 @@ export async function readConfig() {
   return {
     ...defaultConfig,
     ...saved,
+    uiScale: normalizeUiScale(saved.uiScale),
     importPaths: Array.isArray(saved.importPaths) ? saved.importPaths : [],
     featuredEntries,
   }
@@ -322,6 +332,10 @@ export async function updateAppConfig(updates) {
 
   if (typeof updates.bannerIntervalSeconds === 'number' && Number.isFinite(updates.bannerIntervalSeconds)) {
     nextConfig.bannerIntervalSeconds = Math.max(2, Math.round(updates.bannerIntervalSeconds))
+  }
+
+  if (typeof updates.uiScale === 'number' && Number.isFinite(updates.uiScale)) {
+    nextConfig.uiScale = normalizeUiScale(updates.uiScale)
   }
 
   if (typeof updates.bannerVideoMuted === 'boolean') {

@@ -3,6 +3,7 @@
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -18,6 +19,7 @@ const emptyState: GalleryState = {
   config: {
     importPaths: [],
     featuredEntries: [],
+    uiScale: 1,
     bannerIntervalSeconds: 8,
     bannerVideoMuted: true,
     fullscreenSlideshowEnabled: false,
@@ -40,6 +42,7 @@ type GalleryContextValue = {
   removeImportPath: (importPath: string) => Promise<void>
   updateConfig: (updates: {
     featuredEntries?: FeaturedEntry[]
+    uiScale?: number
     bannerIntervalSeconds?: number
     bannerVideoMuted?: boolean
     fullscreenSlideshowEnabled?: boolean
@@ -266,6 +269,8 @@ type ResolvedFeaturedEntry = {
   asset: GalleryAsset | null
 }
 
+type HallPlaybackMode = 'featured' | 'random_mp4' | 'random_mixed'
+
 function createFeaturedEntry(collectionId: string, index: number): FeaturedEntry {
   return {
     id: `featured-${collectionId}-${index + 1}`,
@@ -305,6 +310,43 @@ function getResolvedFeaturedEntries(galleryState: GalleryState) {
     .filter((entry): entry is ResolvedFeaturedEntry => entry !== null)
 }
 
+function shuffleItems<T>(items: T[]) {
+  const shuffled = [...items]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+  return shuffled
+}
+
+function buildRandomHallEntries(
+  collections: CollectionRecord[],
+  mode: Exclude<HallPlaybackMode, 'featured'>,
+) {
+  const candidates = collections.flatMap((collection) =>
+    collection.assets
+      .filter((asset) =>
+        mode === 'random_mp4'
+          ? asset.type === 'video' && asset.name.toLowerCase().endsWith('.mp4')
+          : asset.type === 'image' || asset.type === 'video',
+      )
+      .map((asset, index) => ({
+        entry: {
+          id: `random-${mode}-${collection.id}-${index}-${asset.path}`,
+          collectionId: collection.id,
+          assetPath: asset.path,
+          title: getAssetDisplayName(asset.name),
+          subtitle: collection.displayName,
+          enabled: true,
+        } satisfies FeaturedEntry,
+        collection,
+        asset,
+      })),
+  )
+
+  return shuffleItems(candidates)
+}
+
 function getCircularOffset(index: number, activeIndex: number, length: number) {
   if (length <= 1) {
     return 0
@@ -322,6 +364,11 @@ function getCircularOffset(index: number, activeIndex: number, length: number) {
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
+
+type HallViewportAction =
+  | { type: 'fullscreen' }
+  | { type: 'openCollection'; collectionId: string }
+  | { type: 'jump'; index: number }
 
 function getAssetDisplayName(assetName: string) {
   const withoutExtension = assetName.replace(/\.[^.]+$/, '')
@@ -436,11 +483,13 @@ function HallMediaPreview({
   assets,
   alt,
   active,
+  muted = true,
 }: {
   asset: GalleryAsset | null
   assets: GalleryAsset[]
   alt: string
   active: boolean
+  muted?: boolean
 }) {
   if (!asset) {
     return <div className="featuredPlaceholder">No art</div>
@@ -456,7 +505,7 @@ function HallMediaPreview({
 
   if (asset.type === 'video') {
     if (active || !previewImageUrl) {
-      return <video autoPlay loop muted playsInline preload="metadata" src={assetUrl} />
+      return <video autoPlay loop muted={muted} playsInline preload="metadata" src={assetUrl} />
     }
 
     return <img {...imageProps} src={previewImageUrl} />
@@ -745,33 +794,41 @@ function HomePage() {
 }
 
 function HallPage() {
-  const { galleryState, error } = useGallery()
+  const { galleryState, busy, error, updateConfig } = useGallery()
   const navigate = useNavigate()
   const portraitHallLayout = usePortraitHallLayout()
-  const featuredEntries = getResolvedFeaturedEntries(galleryState)
+  const configuredFeaturedEntries = getResolvedFeaturedEntries(galleryState)
   const [activeIndex, setActiveIndex] = useState(0)
   const [hallFullscreen, setHallFullscreen] = useState(false)
+  const [hallPlaybackMode, setHallPlaybackMode] = useState<HallPlaybackMode>('featured')
+  const [hallRotationEnabled, setHallRotationEnabled] = useState(true)
+  const [hallRandomSeed, setHallRandomSeed] = useState(0)
   const hallViewportRef = useRef<HTMLDivElement | null>(null)
   const hallThumbRefs = useRef<Array<HTMLButtonElement | null>>([])
   const portraitMenuRef = useRef<HTMLDivElement | null>(null)
+  const hallControlMenuRef = useRef<HTMLDivElement | null>(null)
   const hallTransitionKeyRef = useRef(0)
   const activePointerIdRef = useRef<number | null>(null)
+  const pointerActionRef = useRef<HallViewportAction | null>(null)
   const hallTransitionSourceRef = useRef<{
     entry: ResolvedFeaturedEntry | null
     backdropUrl: string | null
     backdropVideo: string | null
     featuredCount: number
+    dragProgress: number
   }>({
     entry: null,
     backdropUrl: null,
     backdropVideo: null,
     featuredCount: 0,
+    dragProgress: 0,
   })
   const dragStartX = useRef<number | null>(null)
   const dragSuppressClickRef = useRef(false)
   const wheelLockRef = useRef(false)
   const [autoRotatePaused, setAutoRotatePaused] = useState(false)
   const [portraitMenuOpen, setPortraitMenuOpen] = useState(false)
+  const [hallControlMenuOpen, setHallControlMenuOpen] = useState(false)
   const [hallDragOffset, setHallDragOffset] = useState(0)
   const [hallDragging, setHallDragging] = useState(false)
   const [hallTransitionDirection, setHallTransitionDirection] = useState<'forward' | 'backward'>('forward')
@@ -782,7 +839,29 @@ function HallPage() {
     entry: ResolvedFeaturedEntry | null
     backdropUrl: string | null
     backdropVideo: string | null
+    dragProgress: number
   } | null>(null)
+
+  const randomHallEntries = useMemo(
+    () => {
+      void hallRandomSeed
+      return hallPlaybackMode === 'featured'
+        ? []
+        : buildRandomHallEntries(galleryState.collections, hallPlaybackMode)
+    },
+    [galleryState.collections, hallPlaybackMode, hallRandomSeed],
+  )
+  const featuredEntries = hallPlaybackMode === 'featured' ? configuredFeaturedEntries : randomHallEntries
+  const randomMp4Available = galleryState.collections.some((collection) =>
+    collection.assets.some((asset) => asset.type === 'video' && asset.name.toLowerCase().endsWith('.mp4')),
+  )
+  const randomMixedAvailable = galleryState.collections.some((collection) => collection.assets.length > 0)
+  const hallPlaybackModeLabel =
+    hallPlaybackMode === 'featured'
+      ? 'Featured Hall'
+      : hallPlaybackMode === 'random_mp4'
+        ? 'Random MP4'
+        : 'Random Mixed'
 
   const resolvedActiveIndex =
     featuredEntries.length === 0 ? 0 : Math.min(activeIndex, featuredEntries.length - 1)
@@ -821,6 +900,31 @@ function HallPage() {
     cardName: transitionCardName,
     collectionName: transitionCollectionName,
   } = getFeaturedEntryDisplay(hallTransitionSnapshot?.entry ?? null)
+  const hallTransitionReleaseProgress = hallTransitionSnapshot?.dragProgress ?? 0
+  const hallTransitionReleaseAbsProgress = Math.abs(hallTransitionReleaseProgress)
+  const hallTransitionFromDrag = hallTransitionReleaseAbsProgress > 0.02
+  const hallTransitionStyle =
+    hallTransitionSnapshot
+      ? ({
+          '--hall-release-progress': `${hallTransitionReleaseProgress}`,
+          '--hall-release-progress-abs': `${hallTransitionReleaseAbsProgress}`,
+        } as CSSProperties)
+      : undefined
+
+  function activateHallPlaybackMode(mode: HallPlaybackMode) {
+    setPortraitMenuOpen(false)
+    setHallControlMenuOpen(false)
+    setHallFullscreen(false)
+    setActiveIndex(0)
+
+    if (mode === 'featured') {
+      setHallPlaybackMode('featured')
+      return
+    }
+
+    setHallPlaybackMode(mode)
+    setHallRandomSeed((current) => current + 1)
+  }
 
   const commitHallTransition = useCallback((direction: 'forward' | 'backward', nextIndex: number) => {
     const {
@@ -828,6 +932,7 @@ function HallPage() {
       backdropUrl,
       backdropVideo,
       featuredCount,
+      dragProgress,
     } = hallTransitionSourceRef.current
 
     if (featuredCount === 0) {
@@ -847,6 +952,7 @@ function HallPage() {
       entry,
       backdropUrl,
       backdropVideo,
+      dragProgress,
     })
     setActiveIndex(nextIndex)
   }, [
@@ -878,8 +984,9 @@ function HallPage() {
       backdropUrl: activeBackdropUrl,
       backdropVideo: activeBackdropVideo,
       featuredCount: featuredEntries.length,
+      dragProgress: hallDragging ? hallDragProgress : 0,
     }
-  }, [activeBackdropUrl, activeBackdropVideo, activeEntry, featuredEntries.length])
+  }, [activeBackdropUrl, activeBackdropVideo, activeEntry, featuredEntries.length, hallDragProgress, hallDragging])
 
   function jumpToIndex(nextIndex: number) {
     if (featuredEntries.length === 0 || nextIndex === resolvedActiveIndex) {
@@ -891,7 +998,7 @@ function HallPage() {
   }
 
   useEffect(() => {
-    if (featuredEntries.length <= 1 || autoRotatePaused || hallFullscreen) {
+    if (!hallRotationEnabled || featuredEntries.length <= 1 || autoRotatePaused || hallFullscreen) {
       return
     }
 
@@ -905,6 +1012,7 @@ function HallPage() {
     autoRotatePaused,
     featuredEntries.length,
     galleryState.config.bannerIntervalSeconds,
+    hallRotationEnabled,
     hallFullscreen,
     showNext,
   ])
@@ -926,6 +1034,55 @@ function HallPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeEntry, showNext, showPrevious])
 
+  function resolveViewportAction(target: HTMLElement | null): HallViewportAction | null {
+    if (!target) {
+      return null
+    }
+
+    const actionElement = target.closest('[data-hall-action]') as HTMLElement | null
+    if (!actionElement) {
+      return null
+    }
+
+    const actionType = actionElement.dataset.hallAction
+    if (actionType === 'fullscreen') {
+      return { type: 'fullscreen' }
+    }
+
+    if (actionType === 'openCollection') {
+      const collectionId = actionElement.dataset.hallCollectionId
+      return collectionId ? { type: 'openCollection', collectionId } : null
+    }
+
+    if (actionType === 'jump') {
+      const rawIndex = actionElement.dataset.hallTargetIndex
+      if (!rawIndex) {
+        return null
+      }
+
+      const index = Number(rawIndex)
+      return Number.isFinite(index) ? { type: 'jump', index } : null
+    }
+
+    return null
+  }
+
+  function performViewportAction(action: HallViewportAction) {
+    if (action.type === 'fullscreen') {
+      if (activeEntry?.asset) {
+        setHallFullscreen(true)
+      }
+      return
+    }
+
+    if (action.type === 'openCollection') {
+      navigate(`/collections/${action.collectionId}`)
+      return
+    }
+
+    jumpToIndex(action.index)
+  }
+
   function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
     if (event.button !== 0 || featuredEntries.length <= 1) {
       return
@@ -936,6 +1093,7 @@ function HallPage() {
       return
     }
 
+    pointerActionRef.current = resolveViewportAction(target)
     activePointerIdRef.current = event.pointerId
     dragStartX.current = event.clientX
     dragSuppressClickRef.current = false
@@ -975,6 +1133,18 @@ function HallPage() {
     setHallDragOffset(0)
 
     if (Math.abs(deltaX) < 56) {
+      const pendingAction = !dragSuppressClickRef.current ? pointerActionRef.current : null
+      pointerActionRef.current = null
+
+      if (pendingAction) {
+        dragSuppressClickRef.current = true
+        performViewportAction(pendingAction)
+        window.setTimeout(() => {
+          dragSuppressClickRef.current = false
+        }, 0)
+        return
+      }
+
       if (dragSuppressClickRef.current) {
         window.setTimeout(() => {
           dragSuppressClickRef.current = false
@@ -984,6 +1154,7 @@ function HallPage() {
     }
 
     if (deltaX > 0) {
+      pointerActionRef.current = null
       showPrevious()
       window.setTimeout(() => {
         dragSuppressClickRef.current = false
@@ -991,6 +1162,7 @@ function HallPage() {
       return
     }
 
+    pointerActionRef.current = null
     showNext()
     window.setTimeout(() => {
       dragSuppressClickRef.current = false
@@ -1004,6 +1176,7 @@ function HallPage() {
 
     dragStartX.current = null
     activePointerIdRef.current = null
+    pointerActionRef.current = null
     setHallDragging(false)
     setHallDragOffset(0)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -1079,19 +1252,24 @@ function HallPage() {
   }, [hallTransitionSnapshot])
 
   useEffect(() => {
-    if (!portraitMenuOpen) {
+    if (!portraitMenuOpen && !hallControlMenuOpen) {
       return
     }
 
     function handlePointerDown(event: MouseEvent) {
-      if (!portraitMenuRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node
+      const insidePortraitMenu = portraitMenuRef.current?.contains(target)
+      const insideHallControlMenu = hallControlMenuRef.current?.contains(target)
+      if (!insidePortraitMenu && !insideHallControlMenu) {
         setPortraitMenuOpen(false)
+        setHallControlMenuOpen(false)
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setPortraitMenuOpen(false)
+        setHallControlMenuOpen(false)
       }
     }
 
@@ -1101,7 +1279,13 @@ function HallPage() {
       window.removeEventListener('mousedown', handlePointerDown)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [portraitMenuOpen])
+  }, [hallControlMenuOpen, portraitMenuOpen])
+
+  async function handleTogglePortraitMute() {
+    await updateConfig({
+      bannerVideoMuted: !galleryState.config.bannerVideoMuted,
+    })
+  }
 
   return (
     <div className="shell hallShell">
@@ -1146,7 +1330,11 @@ function HallPage() {
           <button className="ghostButton" type="button" onClick={() => navigate('/')}>
             Dashboard
           </button>
-          <button className="ghostButton" type="button" onClick={() => navigate('/hall-settings')}>
+          <button
+            className="ghostButton"
+            type="button"
+            onClick={() => navigate('/hall-settings', { state: { fromPath: '/hall' } })}
+          >
             Edit Entries
           </button>
         </div>
@@ -1162,13 +1350,25 @@ function HallPage() {
               <span className="pill">
                 {featuredEntries.length > 0 ? `${resolvedActiveIndex + 1} / ${featuredEntries.length}` : '0 / 0'}
               </span>
+              <span className="pill">{hallPlaybackModeLabel}</span>
+              <span className="pill">{hallRotationEnabled ? 'Rotation On' : 'Rotation Off'}</span>
             </div>
           </div>
 
           {featuredEntries.length === 0 ? (
             <div className="emptyState">
-              <strong>No featured cards configured yet.</strong>
-              <p>Open Hall Settings and add at least one featured entry to populate the hall.</p>
+              <strong>
+                {hallPlaybackMode === 'featured'
+                  ? 'No featured cards configured yet.'
+                  : hallPlaybackMode === 'random_mp4'
+                    ? 'No MP4 assets available for random playback.'
+                    : 'No assets available for random playback.'}
+              </strong>
+              <p>
+                {hallPlaybackMode === 'featured'
+                  ? 'Open Hall Settings and add at least one featured entry to populate the hall.'
+                  : 'Import more collection folders or switch back to the featured hall mode.'}
+              </p>
             </div>
           ) : (
             <div
@@ -1197,57 +1397,112 @@ function HallPage() {
                     onClick={() => navigate('/')}
                   />
 
-                  <div className="hallPortraitMenuWrap">
-                    <button
-                      aria-expanded={portraitMenuOpen}
-                      aria-haspopup="menu"
-                      aria-label="Open hall menu"
-                      className="hallPortraitMenuButton"
-                      type="button"
-                      onClick={() => setPortraitMenuOpen((current) => !current)}
-                    />
+                  <div aria-hidden="true" className="hallPortraitDragHandle" />
 
-                    {portraitMenuOpen ? (
-                      <div className="hallPortraitMenu" role="menu">
-                        <button
-                          className="hallPortraitMenuItem"
-                          role="menuitem"
-                          type="button"
-                          onClick={() => {
-                            setPortraitMenuOpen(false)
-                            navigate('/hall-settings')
-                          }}
-                        >
-                          Hall Settings
-                        </button>
-                        {activeEntry?.asset ? (
+                  <div className="hallPortraitControls">
+                    <div className="hallPortraitMenuWrap">
+                      <button
+                        aria-expanded={portraitMenuOpen}
+                        aria-haspopup="menu"
+                        aria-label="Open hall menu"
+                        className="hallPortraitMenuButton"
+                        type="button"
+                        onClick={() => setPortraitMenuOpen((current) => !current)}
+                      />
+
+                      {portraitMenuOpen ? (
+                        <div className="hallPortraitMenu" role="menu">
+                          <button
+                            className={`hallPortraitMenuItem ${
+                              galleryState.config.bannerVideoMuted ? 'hallPortraitMenuItemActive' : ''
+                            }`}
+                            disabled={busy}
+                            role="menuitem"
+                            type="button"
+                            onClick={() => {
+                              setPortraitMenuOpen(false)
+                              void handleTogglePortraitMute()
+                            }}
+                          >
+                            {galleryState.config.bannerVideoMuted ? 'Unmute featured videos' : 'Mute featured videos'}
+                          </button>
+                          <button
+                            className={`hallPortraitMenuItem ${hallRotationEnabled ? 'hallPortraitMenuItemActive' : ''}`}
+                            role="menuitem"
+                            type="button"
+                            onClick={() => {
+                              setPortraitMenuOpen(false)
+                              setHallRotationEnabled((current) => !current)
+                            }}
+                          >
+                            {hallRotationEnabled ? 'Pause hall rotation' : 'Resume hall rotation'}
+                          </button>
+                          <button
+                            className={`hallPortraitMenuItem ${hallPlaybackMode === 'featured' ? 'hallPortraitMenuItemActive' : ''}`}
+                            role="menuitem"
+                            type="button"
+                            onClick={() => activateHallPlaybackMode('featured')}
+                          >
+                            {hallPlaybackMode === 'featured' ? 'Featured hall active' : 'Switch to featured hall'}
+                          </button>
+                          <button
+                            className={`hallPortraitMenuItem ${hallPlaybackMode === 'random_mp4' ? 'hallPortraitMenuItemActive' : ''}`}
+                            disabled={!randomMp4Available}
+                            role="menuitem"
+                            type="button"
+                            onClick={() => activateHallPlaybackMode('random_mp4')}
+                          >
+                            {hallPlaybackMode === 'random_mp4' ? 'Reshuffle random MP4' : 'Random MP4 from all collections'}
+                          </button>
+                          <button
+                            className={`hallPortraitMenuItem ${hallPlaybackMode === 'random_mixed' ? 'hallPortraitMenuItemActive' : ''}`}
+                            disabled={!randomMixedAvailable}
+                            role="menuitem"
+                            type="button"
+                            onClick={() => activateHallPlaybackMode('random_mixed')}
+                          >
+                            {hallPlaybackMode === 'random_mixed' ? 'Reshuffle random media' : 'Random media from all collections'}
+                          </button>
                           <button
                             className="hallPortraitMenuItem"
                             role="menuitem"
                             type="button"
                             onClick={() => {
                               setPortraitMenuOpen(false)
-                              setHallFullscreen(true)
+                              navigate('/hall-settings', { state: { fromPath: '/hall' } })
                             }}
                           >
-                            Expand Media
+                            Hall Settings
                           </button>
-                        ) : null}
-                        {activeEntry ? (
-                          <button
-                            className="hallPortraitMenuItem"
-                            role="menuitem"
-                            type="button"
-                            onClick={() => {
-                              setPortraitMenuOpen(false)
-                              navigate(`/collections/${activeEntry.collection.id}`)
-                            }}
-                          >
-                            Open Collection
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
+                          {activeEntry?.asset ? (
+                            <button
+                              className="hallPortraitMenuItem"
+                              role="menuitem"
+                              type="button"
+                              onClick={() => {
+                                setPortraitMenuOpen(false)
+                                setHallFullscreen(true)
+                              }}
+                            >
+                              Expand Media
+                            </button>
+                          ) : null}
+                          {activeEntry ? (
+                            <button
+                              className="hallPortraitMenuItem"
+                              role="menuitem"
+                              type="button"
+                              onClick={() => {
+                                setPortraitMenuOpen(false)
+                                navigate(`/collections/${activeEntry.collection.id}`)
+                              }}
+                            >
+                              Open Collection
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -1275,11 +1530,14 @@ function HallPage() {
                   {hallTransitionSnapshot?.entry ? (
                     <article
                       className={`hallFlatHeroCard hallFlatHeroCardLeaving ${
+                        hallTransitionFromDrag ? 'hallTransitionFromDrag ' : ''
+                      }${
                         hallTransitionSnapshot.direction === 'backward'
                           ? 'hallTransitionBackward'
                           : 'hallTransitionForward'
                       }`}
                       key={`flat-leaving-${hallTransitionSnapshot.key}`}
+                      style={hallTransitionStyle}
                     >
                       <div className="hallHeroFrame hallFlatHeroFrame">
                         <div className="hallCardArtwork hallHeroArtwork hallFlatArtwork">
@@ -1303,6 +1561,8 @@ function HallPage() {
                   {previousEntry ? (
                     <button
                       className={`hallFlatSideCard hallFlatSideCardLeft ${hallTransitionClass}`}
+                      data-hall-action="jump"
+                      data-hall-target-index={previousIndex ?? 0}
                       key={`flat-prev-${previousEntry.entry.id}-${hallTransitionTick}`}
                       type="button"
                       onClick={() => jumpToIndex(previousIndex ?? 0)}
@@ -1320,11 +1580,15 @@ function HallPage() {
 
                   {activeEntry ? (
                     <article
-                      className={`hallFlatHeroCard ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''}`}
+                      className={`hallFlatHeroCard ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''} ${
+                        hallTransitionFromDrag ? 'hallTransitionFromDrag' : ''
+                      }`}
                       key={`flat-hero-${activeEntry.entry.id}-${hallTransitionTick}`}
+                      style={hallTransitionStyle}
                     >
                       <button
                         className="hallFlatHeroMediaButton"
+                        data-hall-action="fullscreen"
                         type="button"
                         onClick={() => {
                           if (activeEntry.asset) {
@@ -1339,6 +1603,7 @@ function HallPage() {
                               alt={activeTitle}
                               asset={activeEntry.asset}
                               assets={activeEntry.collection.assets}
+                              muted={galleryState.config.bannerVideoMuted}
                             />
                           </div>
                         </div>
@@ -1348,6 +1613,8 @@ function HallPage() {
                         <span className="hallFlatCode">CD.{activeEntry.collection.id}</span>
                         <button
                           className="hallFlatTitleButton"
+                          data-hall-action="openCollection"
+                          data-hall-collection-id={activeEntry.collection.id}
                           type="button"
                           onClick={() => navigate(`/collections/${activeEntry.collection.id}`)}
                         >
@@ -1361,6 +1628,8 @@ function HallPage() {
                   {nextEntry ? (
                     <button
                       className={`hallFlatSideCard hallFlatSideCardRight ${hallTransitionClass}`}
+                      data-hall-action="jump"
+                      data-hall-target-index={nextIndex ?? 0}
                       key={`flat-next-${nextEntry.entry.id}-${hallTransitionTick}`}
                       type="button"
                       onClick={() => jumpToIndex(nextIndex ?? 0)}
@@ -1429,6 +1698,8 @@ function HallPage() {
                       return (
                         <button
                           className="hallSideCard"
+                          data-hall-action="jump"
+                          data-hall-target-index={index}
                           key={featured.entry.id}
                           style={
                             {
@@ -1466,11 +1737,14 @@ function HallPage() {
                       {hallTransitionSnapshot?.entry ? (
                         <div
                           className={`hallHeroCard hallHeroCardLeaving ${
+                            hallTransitionFromDrag ? 'hallTransitionFromDrag ' : ''
+                          }${
                             hallTransitionSnapshot.direction === 'backward'
                               ? 'hallTransitionBackward'
                               : 'hallTransitionForward'
                           }`}
                           key={`hero-leaving-${hallTransitionSnapshot.key}`}
+                          style={hallTransitionStyle}
                         >
                           <div className="hallHeroFrame">
                             <div className="hallCardArtwork hallHeroArtwork">
@@ -1496,8 +1770,12 @@ function HallPage() {
                       ) : null}
 
                       <button
-                        className={`hallHeroCard hallHeroCardAnimated ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''}`}
+                        className={`hallHeroCard hallHeroCardAnimated ${hallTransitionClass} ${hallDragging ? 'hallIsDragging' : ''} ${
+                          hallTransitionFromDrag ? 'hallTransitionFromDrag' : ''
+                        }`}
+                        data-hall-action="fullscreen"
                         key={`hero-${activeEntry.entry.id}-${hallTransitionTick}`}
+                        style={hallTransitionStyle}
                         type="button"
                         onClick={() => {
                           if (activeEntry.asset) {
@@ -1512,6 +1790,7 @@ function HallPage() {
                               alt={activeTitle}
                               asset={activeEntry.asset}
                               assets={activeEntry.collection.assets}
+                              muted={galleryState.config.bannerVideoMuted}
                             />
                           </div>
                         </div>
@@ -1603,6 +1882,7 @@ function HallPage() {
               <div className="hallInfoMeta">
                 <span>CD.{activeEntry.collection.id}</span>
                 <span>{activeEntry.asset?.type === 'video' ? 'Video' : 'Image'}</span>
+                <span>{hallPlaybackModeLabel}</span>
               </div>
               <p className="subtitle">{activeSubtitle}</p>
               <div className="hallInfoActions">
@@ -1614,7 +1894,77 @@ function HallPage() {
                 >
                   Expand Media
                 </button>
-                <button className="ghostButton" type="button" onClick={() => navigate('/hall-settings')}>
+                <div className="hallControlMenuWrap" ref={hallControlMenuRef}>
+                  <button
+                    aria-expanded={hallControlMenuOpen}
+                    aria-haspopup="menu"
+                    className="ghostButton hallControlMenuButton"
+                    type="button"
+                    onClick={() => setHallControlMenuOpen((current) => !current)}
+                  >
+                    Hall Controls
+                  </button>
+                  {hallControlMenuOpen ? (
+                    <div className="hallControlMenu" role="menu">
+                      <button
+                        className={`hallControlMenuItem ${
+                          galleryState.config.bannerVideoMuted ? 'hallControlMenuItemActive' : ''
+                        }`}
+                        disabled={busy}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          setHallControlMenuOpen(false)
+                          void handleTogglePortraitMute()
+                        }}
+                      >
+                        {galleryState.config.bannerVideoMuted ? 'Unmute featured videos' : 'Mute featured videos'}
+                      </button>
+                      <button
+                        className={`hallControlMenuItem ${hallRotationEnabled ? 'hallControlMenuItemActive' : ''}`}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          setHallControlMenuOpen(false)
+                          setHallRotationEnabled((current) => !current)
+                        }}
+                      >
+                        {hallRotationEnabled ? 'Pause hall rotation' : 'Resume hall rotation'}
+                      </button>
+                      <button
+                        className={`hallControlMenuItem ${hallPlaybackMode === 'featured' ? 'hallControlMenuItemActive' : ''}`}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => activateHallPlaybackMode('featured')}
+                      >
+                        {hallPlaybackMode === 'featured' ? 'Featured hall active' : 'Switch to featured hall'}
+                      </button>
+                      <button
+                        className={`hallControlMenuItem ${hallPlaybackMode === 'random_mp4' ? 'hallControlMenuItemActive' : ''}`}
+                        disabled={!randomMp4Available}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => activateHallPlaybackMode('random_mp4')}
+                      >
+                        {hallPlaybackMode === 'random_mp4' ? 'Reshuffle random MP4' : 'Random MP4 from all collections'}
+                      </button>
+                      <button
+                        className={`hallControlMenuItem ${hallPlaybackMode === 'random_mixed' ? 'hallControlMenuItemActive' : ''}`}
+                        disabled={!randomMixedAvailable}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => activateHallPlaybackMode('random_mixed')}
+                      >
+                        {hallPlaybackMode === 'random_mixed' ? 'Reshuffle random media' : 'Random media from all collections'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  className="ghostButton"
+                  type="button"
+                  onClick={() => navigate('/hall-settings', { state: { fromPath: '/hall' } })}
+                >
                   Edit Entries
                 </button>
               </div>
@@ -1667,6 +2017,13 @@ function SettingsPage() {
       {error ? <div className="statusBanner error">Error: {error}</div> : null}
 
       <main className="detailLayout">
+        <DisplaySettingsSection
+          bridgeReady={bridgeReady}
+          busy={busy}
+          config={galleryState.config}
+          onSave={updateConfig}
+        />
+
         <ViewerSettingsSection
           bridgeReady={bridgeReady}
           busy={busy}
@@ -1689,7 +2046,11 @@ function SettingsPage() {
                 dedicated settings page to edit entries, media, rotation timing, and preview each card.
               </p>
               <div className="settingsActions">
-                <button className="primaryButton" type="button" onClick={() => navigate('/hall-settings')}>
+                <button
+                  className="primaryButton"
+                  type="button"
+                  onClick={() => navigate('/hall-settings', { state: { fromPath: '/settings' } })}
+                >
                   Open Hall Settings
                 </button>
                 <button className="ghostButton" type="button" onClick={() => navigate('/hall')}>
@@ -1733,6 +2094,109 @@ function SettingsPage() {
         </section>
       </main>
     </div>
+  )
+}
+
+function DisplaySettingsSection({
+  config,
+  busy,
+  bridgeReady,
+  onSave,
+}: {
+  config: GalleryState['config']
+  busy: boolean
+  bridgeReady: boolean
+  onSave: (updates: {
+    uiScale?: number
+  }) => Promise<void>
+}) {
+  const [uiScalePercent, setUiScalePercent] = useState(String(Math.round(config.uiScale * 100)))
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setUiScalePercent(String(Math.round(config.uiScale * 100)))
+  }, [config.uiScale])
+
+  const normalizedScalePercent = Number(uiScalePercent)
+  const safeScalePercent = Number.isFinite(normalizedScalePercent)
+    ? Math.min(125, Math.max(75, Math.round(normalizedScalePercent)))
+    : Math.round(config.uiScale * 100)
+  const normalizedScale = safeScalePercent / 100
+  const isDirty = Math.abs(normalizedScale - config.uiScale) > 0.001
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await onSave({
+        uiScale: normalizedScale,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="gridPanel settingsPanel">
+      <div className="panelHeader">
+        <div>
+          <p className="sectionTag">Display</p>
+          <h2>Interface Scale</h2>
+        </div>
+      </div>
+
+      <article className="settingsTextPanel">
+        <div className="settingsBody">
+          <label className="settingsField">
+            <span>Scale Percentage</span>
+            <div className="settingsScaleRow">
+              <input
+                className="settingsRange"
+                max="125"
+                min="75"
+                step="5"
+                type="range"
+                value={safeScalePercent}
+                onChange={(event) => setUiScalePercent(event.target.value)}
+              />
+              <input
+                className="settingsInput settingsScaleInput"
+                max="125"
+                min="75"
+                step="5"
+                type="number"
+                value={uiScalePercent}
+                onChange={(event) => setUiScalePercent(event.target.value)}
+              />
+              <span className="settingsScaleSuffix">%</span>
+            </div>
+          </label>
+
+          <p className="settingsHint">
+            Adjust the overall application size. `100%` is the default size. Smaller values make the whole interface
+            denser, including the dashboard, hall, and collection pages.
+          </p>
+
+          <div className="settingsActions">
+            <button
+              className="primaryButton"
+              disabled={!bridgeReady || busy || saving || !isDirty}
+              type="button"
+              onClick={() => void handleSave()}
+            >
+              {saving ? 'Saving...' : 'Save Display Settings'}
+            </button>
+            <button
+              className="ghostButton"
+              disabled={saving || !isDirty}
+              type="button"
+              onClick={() => setUiScalePercent(String(Math.round(config.uiScale * 100)))}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      </article>
+    </section>
   )
 }
 
@@ -1889,13 +2353,21 @@ function ViewerSettingsSection({
 
 function HallSettingsPage() {
   const { galleryState, busy, error, bridgeReady, updateConfig } = useGallery()
+  const location = useLocation()
   const navigate = useNavigate()
+  const backPath =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'fromPath' in location.state &&
+    typeof location.state.fromPath === 'string'
+      ? location.state.fromPath
+      : '/settings'
 
   return (
     <div className="shell">
       <header className="detailTopbar">
         <div className="detailTitleBlock">
-          <button className="ghostButton" type="button" onClick={() => navigate('/settings')}>
+          <button className="ghostButton" type="button" onClick={() => navigate(backPath)}>
             Back
           </button>
           <div className="viewerInfoCard">
@@ -1912,6 +2384,12 @@ function HallSettingsPage() {
       {error ? <div className="statusBanner error">Error: {error}</div> : null}
 
       <main className="detailLayout">
+        <HallPlaybackSettingsSection
+          bridgeReady={bridgeReady}
+          busy={busy}
+          config={galleryState.config}
+          onSave={updateConfig}
+        />
         <BannerSettingsSection
           bridgeReady={bridgeReady}
           busy={busy}
@@ -1921,6 +2399,108 @@ function HallSettingsPage() {
         />
       </main>
     </div>
+  )
+}
+
+function HallPlaybackSettingsSection({
+  config,
+  busy,
+  bridgeReady,
+  onSave,
+}: {
+  config: GalleryState['config']
+  busy: boolean
+  bridgeReady: boolean
+  onSave: (updates: {
+    bannerIntervalSeconds?: number
+    bannerVideoMuted?: boolean
+  }) => Promise<void>
+}) {
+  const [bannerIntervalSeconds, setBannerIntervalSeconds] = useState(String(config.bannerIntervalSeconds))
+  const [bannerVideoMuted, setBannerVideoMuted] = useState(config.bannerVideoMuted)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setBannerIntervalSeconds(String(config.bannerIntervalSeconds))
+    setBannerVideoMuted(config.bannerVideoMuted)
+  }, [config.bannerIntervalSeconds, config.bannerVideoMuted])
+
+  const normalizedInterval = Number(bannerIntervalSeconds)
+  const isDirty =
+    normalizedInterval !== config.bannerIntervalSeconds || bannerVideoMuted !== config.bannerVideoMuted
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await onSave({
+        bannerIntervalSeconds: Number.isFinite(normalizedInterval) ? normalizedInterval : config.bannerIntervalSeconds,
+        bannerVideoMuted,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="gridPanel settingsPanel">
+      <div className="panelHeader">
+        <div>
+          <p className="sectionTag">Hall Playback</p>
+          <h2>Rotation And Audio</h2>
+        </div>
+      </div>
+
+      <article className="settingsTextPanel">
+        <div className="settingsBody">
+          <label className="settingsField">
+            <span>Rotation Interval Seconds</span>
+            <input
+              className="settingsInput"
+              min="2"
+              step="1"
+              type="number"
+              value={bannerIntervalSeconds}
+              onChange={(event) => setBannerIntervalSeconds(event.target.value)}
+            />
+          </label>
+
+          <label className="settingsToggle">
+            <input
+              checked={bannerVideoMuted}
+              type="checkbox"
+              onChange={(event) => setBannerVideoMuted(event.target.checked)}
+            />
+            <span>Mute featured banner videos</span>
+          </label>
+
+          <p className="settingsHint">
+            These settings control the Featured Hall rotation speed and the default audio behavior of banner videos.
+          </p>
+
+          <div className="settingsActions">
+            <button
+              className="primaryButton"
+              disabled={!bridgeReady || busy || saving || !isDirty}
+              type="button"
+              onClick={() => void handleSave()}
+            >
+              {saving ? 'Saving...' : 'Save Hall Playback'}
+            </button>
+            <button
+              className="ghostButton"
+              disabled={saving || !isDirty}
+              type="button"
+              onClick={() => {
+                setBannerIntervalSeconds(String(config.bannerIntervalSeconds))
+                setBannerVideoMuted(config.bannerVideoMuted)
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      </article>
+    </section>
   )
 }
 
@@ -1937,32 +2517,108 @@ function BannerSettingsSection({
   collections: CollectionRecord[]
   onSave: (updates: {
     featuredEntries?: FeaturedEntry[]
-    bannerIntervalSeconds?: number
-    bannerVideoMuted?: boolean
   }) => Promise<void>
 }) {
   const [featuredEntries, setFeaturedEntries] = useState(config.featuredEntries)
-  const [bannerIntervalSeconds, setBannerIntervalSeconds] = useState(String(config.bannerIntervalSeconds))
-  const [bannerVideoMuted, setBannerVideoMuted] = useState(config.bannerVideoMuted)
+  const [entryViewMode, setEntryViewMode] = useState<'builder' | 'gallery'>('builder')
+  const [gallerySearch, setGallerySearch] = useState('')
+  const [galleryCollectionFilter, setGalleryCollectionFilter] = useState('all')
   const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null)
   const [dragOverEntryId, setDragOverEntryId] = useState<string | null>(null)
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([])
+  const [builderScrollTargetId, setBuilderScrollTargetId] = useState<string | null>(null)
+  const [builderHighlightEntryId, setBuilderHighlightEntryId] = useState<string | null>(null)
+  const builderEntryRefs = useRef<Record<string, HTMLElement | null>>({})
+  const [saveFeedback, setSaveFeedback] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setFeaturedEntries(config.featuredEntries)
-    setBannerIntervalSeconds(String(config.bannerIntervalSeconds))
-    setBannerVideoMuted(config.bannerVideoMuted)
     setDraggedEntryId(null)
     setDragOverEntryId(null)
-  }, [config.bannerIntervalSeconds, config.bannerVideoMuted, config.featuredEntries])
+  }, [config.featuredEntries])
 
-  const normalizedInterval = Number(bannerIntervalSeconds)
+  useEffect(() => {
+    if (!saveFeedback || saveFeedback.type !== 'success') {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSaveFeedback((current) => (current?.type === 'success' ? null : current))
+    }, 2200)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [saveFeedback])
+
+  useEffect(() => {
+    const currentIdSet = new Set(featuredEntries.map((entry) => entry.id))
+    setSelectedEntryIds((currentIds) => currentIds.filter((entryId) => currentIdSet.has(entryId)))
+  }, [featuredEntries])
+
   const representedCollectionIds = new Set(featuredEntries.map((entry) => entry.collectionId))
   const missingCollections = collections.filter((collection) => !representedCollectionIds.has(collection.id))
-  const isDirty =
-    JSON.stringify(featuredEntries) !== JSON.stringify(config.featuredEntries) ||
-    normalizedInterval !== config.bannerIntervalSeconds ||
-    bannerVideoMuted !== config.bannerVideoMuted
+  const isDirty = JSON.stringify(featuredEntries) !== JSON.stringify(config.featuredEntries)
+  const selectedEntryIdSet = new Set(selectedEntryIds)
+
+  const resolvedFeaturedEntries = featuredEntries.map((entry, index) => {
+    const collection = collections.find((candidate) => candidate.id === entry.collectionId) ?? null
+    const availableAssets = collection?.assets ?? []
+    const previewAsset = collection ? getCollectionFeaturedAsset(collection, entry.assetPath) : null
+    const previewUrl = previewAsset ? toAssetUrl(previewAsset.path) : null
+    const previewImageUrl =
+      previewAsset && collection ? getPreviewImageUrl(previewAsset, collection.assets) : null
+    const entryTitle = entry.title.trim() || collection?.displayName || `Featured Card ${index + 1}`
+    const entrySubtitle = entry.subtitle.trim() || `Collection ${collection?.id ?? '000000'}`
+
+    return {
+      entry,
+      index,
+      collection,
+      availableAssets,
+      previewAsset,
+      previewUrl,
+      previewImageUrl,
+      entryTitle,
+      entrySubtitle,
+    }
+  })
+
+  const normalizedGallerySearch = gallerySearch.trim().toLowerCase()
+  const filteredResolvedFeaturedEntries = resolvedFeaturedEntries.filter(
+    ({ entry, collection, previewAsset, entryTitle, entrySubtitle }) => {
+      const matchesCollection =
+        galleryCollectionFilter === 'all' || entry.collectionId === galleryCollectionFilter
+      if (!matchesCollection) {
+        return false
+      }
+
+      if (!normalizedGallerySearch) {
+        return true
+      }
+
+      const searchBucket = [
+        entryTitle,
+        entrySubtitle,
+        collection?.displayName ?? '',
+        collection?.id ?? '',
+        previewAsset?.name ?? '',
+        entry.title,
+        entry.subtitle,
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      return searchBucket.includes(normalizedGallerySearch)
+    },
+  )
+  const visibleEntryIds = filteredResolvedFeaturedEntries.map(({ entry }) => entry.id)
+  const visibleEntryIdSet = new Set(visibleEntryIds)
+  const selectedVisibleCount = selectedEntryIds.filter((entryId) => visibleEntryIdSet.has(entryId)).length
+  const allVisibleSelected =
+    visibleEntryIds.length > 0 && selectedVisibleCount === visibleEntryIds.length
 
   function updateEntry(entryId: string, updater: (entry: FeaturedEntry) => FeaturedEntry) {
     setFeaturedEntries((currentEntries) =>
@@ -1972,10 +2628,12 @@ function BannerSettingsSection({
 
   function addEntry() {
     const collection = collections[0]
-    setFeaturedEntries((currentEntries) => [
-      ...currentEntries,
-      createFeaturedEntry(collection?.id ?? '000000', currentEntries.length),
-    ])
+    setFeaturedEntries((currentEntries) => {
+      const nextEntry = createFeaturedEntry(collection?.id ?? '000000', currentEntries.length)
+      setBuilderScrollTargetId(nextEntry.id)
+      setBuilderHighlightEntryId(nextEntry.id)
+      return [...currentEntries, nextEntry]
+    })
   }
 
   function addMissingCollections() {
@@ -1991,6 +2649,40 @@ function BannerSettingsSection({
 
   function removeEntry(entryId: string) {
     setFeaturedEntries((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId))
+  }
+
+  function toggleEntrySelection(entryId: string) {
+    setSelectedEntryIds((currentIds) =>
+      currentIds.includes(entryId)
+        ? currentIds.filter((currentId) => currentId !== entryId)
+        : [...currentIds, entryId],
+    )
+  }
+
+  function toggleSelectAllEntries() {
+    setSelectedEntryIds((currentIds) => {
+      if (allVisibleSelected) {
+        return currentIds.filter((entryId) => !visibleEntryIdSet.has(entryId))
+      }
+
+      const nextIds = new Set(currentIds)
+      visibleEntryIds.forEach((entryId) => {
+        nextIds.add(entryId)
+      })
+      return Array.from(nextIds)
+    })
+  }
+
+  function removeSelectedEntries() {
+    if (selectedEntryIds.length === 0) {
+      return
+    }
+
+    const selectedIdSet = new Set(selectedEntryIds)
+    setFeaturedEntries((currentEntries) =>
+      currentEntries.filter((entry) => !selectedIdSet.has(entry.id)),
+    )
+    setSelectedEntryIds([])
   }
 
   function duplicateEntry(entryId: string) {
@@ -2121,13 +2813,60 @@ function BannerSettingsSection({
     setDragOverEntryId(null)
   }
 
+  useEffect(() => {
+    if (entryViewMode !== 'builder' || !builderScrollTargetId) {
+      return
+    }
+
+    const targetNode = builderEntryRefs.current[builderScrollTargetId]
+    if (!targetNode) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      targetNode.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+      window.setTimeout(() => {
+        setBuilderScrollTargetId((currentId) =>
+          currentId === builderScrollTargetId ? null : currentId,
+        )
+      }, 420)
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [builderScrollTargetId, entryViewMode, featuredEntries.length])
+
+  useEffect(() => {
+    if (!builderHighlightEntryId) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setBuilderHighlightEntryId((currentId) =>
+        currentId === builderHighlightEntryId ? null : currentId,
+      )
+    }, 1800)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [builderHighlightEntryId])
+
   async function handleSave() {
     setSaving(true)
     try {
       await onSave({
         featuredEntries,
-        bannerIntervalSeconds: Number.isFinite(normalizedInterval) ? normalizedInterval : config.bannerIntervalSeconds,
-        bannerVideoMuted,
+      })
+      setSaveFeedback({
+        type: 'success',
+        message: 'Featured entries saved.',
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save hall settings.'
+      setSaveFeedback({
+        type: 'error',
+        message,
       })
     } finally {
       setSaving(false)
@@ -2159,9 +2898,37 @@ function BannerSettingsSection({
       <div className="settingsList">
         <article className="settingsCard settingsCardWide">
           <div className="settingsBody">
+            {saveFeedback ? (
+              <div className={`statusBanner ${saveFeedback.type === 'error' ? 'error' : 'success'}`}>
+                {saveFeedback.type === 'error' ? `Save failed: ${saveFeedback.message}` : saveFeedback.message}
+              </div>
+            ) : null}
+
+            <div className="featuredEntryViewSwitch" role="tablist" aria-label="Featured entry views">
+              <button
+                aria-selected={entryViewMode === 'builder'}
+                className={`featuredEntryViewButton ${entryViewMode === 'builder' ? 'featuredEntryViewButtonActive' : ''}`}
+                role="tab"
+                type="button"
+                onClick={() => setEntryViewMode('builder')}
+              >
+                Builder
+              </button>
+              <button
+                aria-selected={entryViewMode === 'gallery'}
+                className={`featuredEntryViewButton ${entryViewMode === 'gallery' ? 'featuredEntryViewButtonActive' : ''}`}
+                role="tab"
+                type="button"
+                onClick={() => setEntryViewMode('gallery')}
+              >
+                Gallery
+              </button>
+            </div>
+
             <div className="featuredEntrySummary">
               <span className="pill">{featuredEntries.length} hall card(s)</span>
               <span className="pill">{missingCollections.length} collection(s) not yet in hall</span>
+              {entryViewMode === 'gallery' ? <span className="pill">{selectedEntryIds.length} selected</span> : null}
             </div>
 
             {featuredEntries.length === 0 ? (
@@ -2169,24 +2936,160 @@ function BannerSettingsSection({
                 <strong>No featured entries configured.</strong>
                 <p>Add one or more featured cards here. Each entry can point at any collection and any media asset.</p>
               </div>
+            ) : entryViewMode === 'gallery' ? (
+              <>
+                <div className="featuredEntryGalleryToolbar">
+                  <div className="featuredEntryGalleryFilters">
+                    <label className="settingsField featuredEntryGalleryField">
+                      <span>Search</span>
+                      <input
+                        className="settingsInput"
+                        placeholder="Search title, subtitle, collection..."
+                        type="text"
+                        value={gallerySearch}
+                        onChange={(event) => setGallerySearch(event.target.value)}
+                      />
+                    </label>
+                    <label className="settingsField featuredEntryGalleryField">
+                      <span>Collection</span>
+                      <select
+                        className="settingsSelect"
+                        value={galleryCollectionFilter}
+                        onChange={(event) => setGalleryCollectionFilter(event.target.value)}
+                      >
+                        <option value="all">All collections</option>
+                        {collections.map((collection) => (
+                          <option key={`gallery-filter-${collection.id}`} value={collection.id}>
+                            {collection.displayName} ({collection.id})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="featuredEntryGalleryActions">
+                    <span className="pill">{filteredResolvedFeaturedEntries.length} visible</span>
+                    <span className="pill">{selectedVisibleCount} visible selected</span>
+                    <button className="ghostButton" type="button" onClick={toggleSelectAllEntries}>
+                      {allVisibleSelected ? 'Clear Visible' : 'Select Visible'}
+                    </button>
+                    <button
+                      className="ghostButton featuredEntryDanger"
+                      disabled={selectedEntryIds.length === 0}
+                      type="button"
+                      onClick={removeSelectedEntries}
+                    >
+                      Remove Selected
+                    </button>
+                  </div>
+                </div>
+
+                {filteredResolvedFeaturedEntries.length === 0 ? (
+                  <div className="emptyState">
+                    <strong>No featured entries match the current filters.</strong>
+                    <p>Adjust the search text or collection filter to bring cards back into view.</p>
+                  </div>
+                ) : (
+                  <div className="featuredEntryGallery">
+                    {filteredResolvedFeaturedEntries.map(
+                    ({
+                      entry,
+                      index,
+                      collection,
+                      previewAsset,
+                      previewUrl,
+                      previewImageUrl,
+                      entryTitle,
+                      entrySubtitle,
+                    }) => {
+                      const isSelected = selectedEntryIdSet.has(entry.id)
+                      const previewAlt = entry.title || collection?.displayName || `Featured card ${index + 1}`
+
+                      return (
+                        <article
+                          className={`featuredEntryGalleryCard ${isSelected ? 'featuredEntryGalleryCardSelected' : ''}`}
+                          key={`gallery-${entry.id}`}
+                        >
+                          <button
+                            aria-pressed={isSelected}
+                            className="featuredEntryGalleryPreview"
+                            type="button"
+                            onClick={() => toggleEntrySelection(entry.id)}
+                          >
+                            {previewAsset && previewUrl ? (
+                              previewAsset.type === 'video' && !previewImageUrl ? (
+                                <video autoPlay loop muted playsInline preload="metadata" src={previewUrl} />
+                              ) : (
+                                <img alt={previewAlt} draggable={false} src={previewImageUrl ?? previewUrl} />
+                              )
+                            ) : (
+                              <div className="collectionPlaceholder">No preview</div>
+                            )}
+
+                            <span className="featuredEntryGalleryCheck">
+                              <input
+                                checked={isSelected}
+                                readOnly
+                                tabIndex={-1}
+                                type="checkbox"
+                              />
+                            </span>
+                            <span className="featuredEntryGalleryOrder">#{index + 1}</span>
+                            <span className="featuredEntryGalleryStatus">
+                              {entry.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </button>
+
+                          <div className="featuredEntryGalleryMeta">
+                            <strong title={entryTitle}>{entryTitle}</strong>
+                            <span title={entrySubtitle}>{entrySubtitle}</span>
+                            <div className="featuredEntryBadges">
+                              <span className="pill">CD.{collection?.id ?? '000000'}</span>
+                              <span className="pill">{previewAsset?.type === 'video' ? 'Video' : 'Image'}</span>
+                            </div>
+                            <div className="featuredEntryGalleryCardActions">
+                              <button
+                                className="ghostButton featuredEntryAction"
+                                type="button"
+                                onClick={() => {
+                                  setBuilderScrollTargetId(entry.id)
+                                  setBuilderHighlightEntryId(entry.id)
+                                  setEntryViewMode('builder')
+                                }}
+                              >
+                                Edit in Builder
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      )
+                    },
+                    )}
+                  </div>
+                )}
+              </>
             ) : (
               <div className="featuredEntryList">
-                {featuredEntries.map((entry, index) => {
-                  const collection = collections.find((candidate) => candidate.id === entry.collectionId) ?? null
-                  const availableAssets = collection?.assets ?? []
-                  const previewAsset = collection ? getCollectionFeaturedAsset(collection, entry.assetPath) : null
-                  const previewUrl = previewAsset ? toAssetUrl(previewAsset.path) : null
-                  const previewImageUrl =
-                    previewAsset && collection ? getPreviewImageUrl(previewAsset, collection.assets) : null
-                  const entryTitle = entry.title.trim() || collection?.displayName || `Featured Card ${index + 1}`
-                  const entrySubtitle = entry.subtitle.trim() || `Collection ${collection?.id ?? '000000'}`
+                {resolvedFeaturedEntries.map(({
+                  entry,
+                  index,
+                  collection,
+                  availableAssets,
+                  previewAsset,
+                  previewUrl,
+                  previewImageUrl,
+                  entryTitle,
+                  entrySubtitle,
+                }) => {
                   const isDragSource = draggedEntryId === entry.id
                   const isDropTarget = dragOverEntryId === entry.id && draggedEntryId !== entry.id
 
                   return (
                     <article
-                      className={`featuredEntryCard ${isDragSource ? 'featuredEntryCardDragging' : ''} ${isDropTarget ? 'featuredEntryCardDropTarget' : ''}`}
+                      className={`featuredEntryCard ${isDragSource ? 'featuredEntryCardDragging' : ''} ${isDropTarget ? 'featuredEntryCardDropTarget' : ''} ${builderHighlightEntryId === entry.id ? 'featuredEntryCardHighlighted' : ''}`}
                       key={entry.id}
+                      ref={(node) => {
+                        builderEntryRefs.current[entry.id] = node
+                      }}
                       onDragOver={(event) => handleEntryDragOver(event, entry.id)}
                       onDrop={(event) => handleEntryDrop(event, entry.id)}
                     >
@@ -2395,29 +3298,18 @@ function BannerSettingsSection({
                     </article>
                   )
                 })}
+
+                <article className="featuredEntryCard featuredEntryCardAdd">
+                  <button className="featuredEntryAddSlot" type="button" onClick={addEntry}>
+                    <span aria-hidden="true" className="featuredEntryAddGlyph">
+                      +
+                    </span>
+                    <strong>Add Entry</strong>
+                    <span>Create a new featured card at the end of the builder list.</span>
+                  </button>
+                </article>
               </div>
             )}
-
-            <label className="settingsField">
-              <span>Rotation Interval Seconds</span>
-              <input
-                className="settingsInput"
-                min="2"
-                step="1"
-                type="number"
-                value={bannerIntervalSeconds}
-                onChange={(event) => setBannerIntervalSeconds(event.target.value)}
-              />
-            </label>
-
-            <label className="settingsToggle">
-              <input
-                checked={bannerVideoMuted}
-                type="checkbox"
-                onChange={(event) => setBannerVideoMuted(event.target.checked)}
-              />
-              <span>Mute featured banner videos</span>
-            </label>
 
             <p className="settingsHint">
               Featured cards are independent entries now. You can reuse the same collection multiple times with different media, titles, and subtitles.
@@ -2430,7 +3322,7 @@ function BannerSettingsSection({
                 type="button"
                 onClick={() => void handleSave()}
               >
-                {saving ? 'Saving...' : 'Save Banner Settings'}
+                {saving ? 'Saving...' : 'Save Featured Entries'}
               </button>
               <button
                 className="ghostButton"
@@ -2438,8 +3330,6 @@ function BannerSettingsSection({
                 type="button"
                 onClick={() => {
                   setFeaturedEntries(config.featuredEntries)
-                  setBannerIntervalSeconds(String(config.bannerIntervalSeconds))
-                  setBannerVideoMuted(config.bannerVideoMuted)
                 }}
               >
                 Reset

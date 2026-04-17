@@ -21,6 +21,7 @@ declare global {
           subtitle: string
           enabled: boolean
         }>
+        uiScale?: number
         bannerIntervalSeconds?: number
         bannerVideoMuted?: boolean
         fullscreenSlideshowEnabled?: boolean

@@ -398,6 +398,12 @@
   border-color: rgba(255, 136, 136, 0.24);
 }
 
+.statusBanner.success {
+  background: rgba(36, 118, 92, 0.18);
+  border-color: rgba(140, 231, 214, 0.28);
+  color: #eafcf7;
+}
+
 .heroPanel,
 .gridPanel,
 .detailHero {
@@ -654,7 +660,7 @@
   gap: 18px;
 }
 
-.settingsCardWide {
+.settingsCard.settingsCardWide {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -719,6 +725,29 @@
   font-size: 0.92rem;
 }
 
+.settingsScaleRow {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 92px auto;
+}
+
+.settingsRange {
+  accent-color: #8ce7d6;
+  width: 100%;
+}
+
+.settingsScaleInput {
+  text-align: center;
+}
+
+.settingsScaleSuffix {
+  color: rgba(225, 235, 255, 0.72);
+  font-size: 0.96rem;
+  font-weight: 600;
+  min-width: 18px;
+}
+
 .settingsInput,
 .settingsSelect {
   background: rgba(7, 15, 28, 0.85);
@@ -777,6 +806,105 @@
   transform: translateY(-2px);
 }
 
+.featuredEntryCardHighlighted {
+  animation: featuredEntryCardHighlight 1.4s cubic-bezier(0.22, 0.88, 0.22, 1);
+  border-color: rgba(140, 231, 214, 0.44);
+  box-shadow:
+    0 0 0 1px rgba(140, 231, 214, 0.18),
+    0 24px 46px rgba(0, 0, 0, 0.24);
+}
+
+.featuredEntryCardAdd {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+}
+
+.featuredEntryAddSlot {
+  align-items: center;
+  appearance: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+    rgba(6, 12, 22, 0.18);
+  border: 0;
+  border-radius: 22px;
+  color: #eef4ff;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  min-height: 220px;
+  padding: 32px 24px;
+  text-align: center;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.featuredEntryAddSlot:hover,
+.featuredEntryAddSlot:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgba(140, 231, 214, 0.18),
+    0 18px 36px rgba(0, 0, 0, 0.18);
+  transform: translateY(-2px);
+}
+
+.featuredEntryAddSlot::before {
+  border: 1px dashed rgba(140, 231, 214, 0.28);
+  border-radius: 18px;
+  content: '';
+  inset: 18px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.featuredEntryAddSlot {
+  position: relative;
+}
+
+.featuredEntryAddGlyph {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(140, 231, 214, 0.18), rgba(140, 231, 214, 0.08)),
+    rgba(140, 231, 214, 0.08);
+  border: 1px solid rgba(140, 231, 214, 0.22);
+  border-radius: 999px;
+  color: #8ce7d6;
+  display: inline-flex;
+  font-size: 2rem;
+  height: 62px;
+  justify-content: center;
+  line-height: 1;
+  width: 62px;
+}
+
+.featuredEntryAddSlot strong {
+  font-size: 1.18rem;
+}
+
+.featuredEntryAddSlot span:last-child {
+  color: rgba(225, 235, 255, 0.68);
+  max-width: 42ch;
+}
+
+@keyframes featuredEntryCardHighlight {
+  0% {
+    border-color: rgba(140, 231, 214, 0.62);
+    box-shadow:
+      0 0 0 1px rgba(140, 231, 214, 0.28),
+      0 0 0 14px rgba(140, 231, 214, 0.08),
+      0 26px 52px rgba(0, 0, 0, 0.26);
+    transform: translateY(-2px);
+  }
+  100% {
+    border-color: rgba(140, 231, 214, 0.2);
+    box-shadow:
+      0 0 0 1px rgba(140, 231, 214, 0.06),
+      0 18px 36px rgba(0, 0, 0, 0.18);
+    transform: translateY(0);
+  }
+}
+
 .featuredEntryHeader,
 .hallStageHeader,
 .hallStageMeta {
@@ -791,6 +919,44 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.featuredEntryViewSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(7, 15, 28, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.featuredEntryViewButton {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(225, 235, 255, 0.7);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 18px;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.featuredEntryViewButtonActive {
+  background:
+    linear-gradient(180deg, rgba(140, 231, 214, 0.14), rgba(140, 231, 214, 0.08)),
+    rgba(140, 231, 214, 0.08);
+  box-shadow:
+    inset 0 0 0 1px rgba(140, 231, 214, 0.16),
+    0 8px 22px rgba(0, 0, 0, 0.16);
+  color: #eefcff;
 }
 
 .featuredEntryGrid {
@@ -954,6 +1120,163 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.featuredEntryGalleryToolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.featuredEntryGalleryFilters {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 360px) minmax(220px, 320px);
+  align-items: end;
+  flex: 1;
+}
+
+.featuredEntryGalleryField {
+  min-width: 0;
+}
+
+.featuredEntryGalleryHint {
+  max-width: 820px;
+}
+
+.featuredEntryGalleryActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.featuredEntryGallery {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.featuredEntryGalleryCard {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(6, 12, 22, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  display: grid;
+  overflow: hidden;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.featuredEntryGalleryCard:hover {
+  border-color: rgba(140, 231, 214, 0.16);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
+  transform: translateY(-2px);
+}
+
+.featuredEntryGalleryCardSelected {
+  border-color: rgba(140, 231, 214, 0.32);
+  box-shadow:
+    0 0 0 1px rgba(140, 231, 214, 0.16),
+    0 24px 42px rgba(0, 0, 0, 0.22);
+}
+
+.featuredEntryGalleryPreview {
+  appearance: none;
+  aspect-ratio: 0.72;
+  background: rgba(255, 255, 255, 0.03);
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.featuredEntryGalleryPreview img,
+.featuredEntryGalleryPreview video {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.featuredEntryGalleryPreview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(7, 15, 28, 0.2), rgba(7, 15, 28, 0) 28%),
+    linear-gradient(180deg, rgba(7, 15, 28, 0), rgba(7, 15, 28, 0.76));
+}
+
+.featuredEntryGalleryCheck,
+.featuredEntryGalleryOrder,
+.featuredEntryGalleryStatus {
+  position: absolute;
+  z-index: 1;
+}
+
+.featuredEntryGalleryCheck {
+  left: 12px;
+  top: 12px;
+}
+
+.featuredEntryGalleryCheck input {
+  accent-color: #8ce7d6;
+  height: 18px;
+  margin: 0;
+  pointer-events: none;
+  width: 18px;
+}
+
+.featuredEntryGalleryOrder,
+.featuredEntryGalleryStatus {
+  backdrop-filter: blur(14px);
+  background: rgba(7, 15, 28, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #eef4ff;
+  font-size: 0.82rem;
+  line-height: 1;
+  padding: 8px 10px;
+}
+
+.featuredEntryGalleryOrder {
+  right: 12px;
+  top: 12px;
+}
+
+.featuredEntryGalleryStatus {
+  bottom: 12px;
+  right: 12px;
+}
+
+.featuredEntryGalleryMeta {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.featuredEntryGalleryMeta strong,
+.featuredEntryGalleryMeta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.featuredEntryGalleryMeta span {
+  color: rgba(225, 235, 255, 0.68);
+}
+
+.featuredEntryGalleryCardActions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .hallSettingsShortcutCard {
@@ -1317,10 +1640,25 @@
 }
 
 .hallHeroCardAnimated {
+  --hall-enter-from-x: 26px;
+  --hall-enter-from-rotate: 0deg;
+  --hall-enter-from-scale: 0.985;
   transition:
     transform 220ms cubic-bezier(0.22, 0.88, 0.22, 1),
     opacity 220ms cubic-bezier(0.22, 0.88, 0.22, 1),
     filter 220ms cubic-bezier(0.22, 0.88, 0.22, 1);
+}
+
+.hallHeroCardAnimated.hallTransitionFromDrag.hallTransitionForward {
+  --hall-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * 18px + 6px);
+  --hall-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * -4deg);
+  --hall-enter-from-scale: calc(0.988 + (var(--hall-release-progress-abs) * 0.008));
+}
+
+.hallHeroCardAnimated.hallTransitionFromDrag.hallTransitionBackward {
+  --hall-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * -18px - 6px);
+  --hall-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * 4deg);
+  --hall-enter-from-scale: calc(0.988 + (var(--hall-release-progress-abs) * 0.008));
 }
 
 .hallStageOrbit.hallIsDragging .hallSideCard,
@@ -1343,11 +1681,22 @@
 }
 
 .hallHeroCardLeaving {
+  --hall-leave-from-x: 0px;
+  --hall-leave-from-rotate: 0deg;
+  --hall-leave-from-scale: 1;
+  --hall-leave-from-saturate: 1;
   inset: 0;
   margin: auto;
   pointer-events: none;
   position: absolute;
   height: max-content;
+}
+
+.hallHeroCardLeaving.hallTransitionFromDrag {
+  --hall-leave-from-x: calc(var(--hall-release-progress) * 76px);
+  --hall-leave-from-rotate: calc(var(--hall-release-progress) * -10deg);
+  --hall-leave-from-scale: calc(1 - (var(--hall-release-progress-abs) * 0.035));
+  --hall-leave-from-saturate: calc(1 - (var(--hall-release-progress-abs) * 0.08));
 }
 
 .hallHeroCardAnimated.hallTransitionForward {
@@ -1369,7 +1718,10 @@
 @keyframes hallHeroSwapForward {
   from {
     opacity: 0;
-    transform: translate3d(26px, 0, 0) scale(0.985);
+    transform:
+      translate3d(var(--hall-enter-from-x), 0, 0)
+      rotateY(var(--hall-enter-from-rotate))
+      scale(var(--hall-enter-from-scale));
     filter: saturate(0.92);
   }
   to {
@@ -1382,7 +1734,10 @@
 @keyframes hallHeroSwapBackward {
   from {
     opacity: 0;
-    transform: translate3d(-26px, 0, 0) scale(0.985);
+    transform:
+      translate3d(var(--hall-enter-from-x), 0, 0)
+      rotateY(var(--hall-enter-from-rotate))
+      scale(var(--hall-enter-from-scale));
     filter: saturate(0.92);
   }
   to {
@@ -1395,12 +1750,15 @@
 @keyframes hallHeroLeaveForward {
   from {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-    filter: saturate(1);
+    transform:
+      translate3d(var(--hall-leave-from-x), 0, 0)
+      rotateY(var(--hall-leave-from-rotate))
+      scale(var(--hall-leave-from-scale));
+    filter: saturate(var(--hall-leave-from-saturate));
   }
   to {
     opacity: 0;
-    transform: translate3d(-22px, 0, 0) scale(0.985);
+    transform: translate3d(-38px, 0, 0) rotateY(8deg) scale(0.978);
     filter: saturate(0.92);
   }
 }
@@ -1408,12 +1766,15 @@
 @keyframes hallHeroLeaveBackward {
   from {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-    filter: saturate(1);
+    transform:
+      translate3d(var(--hall-leave-from-x), 0, 0)
+      rotateY(var(--hall-leave-from-rotate))
+      scale(var(--hall-leave-from-scale));
+    filter: saturate(var(--hall-leave-from-saturate));
   }
   to {
     opacity: 0;
-    transform: translate3d(22px, 0, 0) scale(0.985);
+    transform: translate3d(38px, 0, 0) rotateY(-8deg) scale(0.978);
     filter: saturate(0.92);
   }
 }
@@ -1528,6 +1889,74 @@
 .hallInfoActions {
   display: flex;
   gap: 12px;
+}
+
+.hallControlMenuWrap {
+  position: relative;
+}
+
+.hallControlMenuButton {
+  min-width: 150px;
+}
+
+.hallControlMenu {
+  backdrop-filter: blur(20px);
+  background:
+    linear-gradient(180deg, rgba(14, 22, 38, 0.92), rgba(6, 10, 18, 0.96)),
+    rgba(7, 12, 22, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 6px;
+  min-width: 250px;
+  overflow: hidden;
+  padding: 8px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 20;
+}
+
+.hallControlMenuItem {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: #eef4ff;
+  cursor: pointer;
+  font: inherit;
+  padding: 11px 14px;
+  text-align: left;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.hallControlMenuItem:hover,
+.hallControlMenuItem:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff6d2;
+  transform: translateX(1px);
+}
+
+.hallControlMenuItem:focus-visible {
+  outline: 1px solid rgba(255, 243, 201, 0.22);
+  outline-offset: -1px;
+}
+
+.hallControlMenuItemActive {
+  background: rgba(140, 231, 214, 0.1);
+  color: #8ce7d6;
+}
+
+.hallControlMenuItem:disabled {
+  cursor: default;
+  opacity: 0.45;
+  transform: none;
 }
 
 .hallPortraitMeta,
@@ -1937,6 +2366,7 @@
     opacity: 1;
     transform: translateY(0);
   }
+
 }
 
 @media (max-width: 720px) {
@@ -1994,6 +2424,31 @@
   .featuredEntryPanelActions,
   .featuredEntrySummary {
     justify-content: flex-start;
+  }
+
+  .featuredEntryViewSwitch,
+  .featuredEntryGalleryToolbar,
+  .featuredEntryGalleryActions,
+  .featuredEntryGalleryFilters,
+  .settingsScaleRow {
+    width: 100%;
+  }
+
+  .featuredEntryGalleryToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .featuredEntryGalleryFilters {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsScaleRow {
+    grid-template-columns: 1fr;
+  }
+
+  .featuredEntryGallery {
+    grid-template-columns: 1fr;
   }
 
   .viewerStage,
@@ -2135,8 +2590,16 @@
     z-index: 50;
   }
 
+  .hallPortraitDragHandle {
+    -webkit-app-region: drag;
+    flex: 1;
+    min-height: 48px;
+    pointer-events: auto;
+  }
+
   .hallPortraitBackButton,
   .hallPortraitMenuButton {
+    -webkit-app-region: no-drag;
     align-items: center;
     appearance: none;
     backdrop-filter: blur(18px);
@@ -2203,11 +2666,116 @@
   }
 
   .hallPortraitMenuWrap {
+    -webkit-app-region: no-drag;
     display: grid;
     gap: 8px;
     justify-items: end;
     pointer-events: auto;
     position: relative;
+  }
+
+  .hallPortraitControls {
+    -webkit-app-region: no-drag;
+    align-items: start;
+    display: flex;
+    gap: 10px;
+    pointer-events: auto;
+  }
+
+  .hallPortraitAudioButton {
+    -webkit-app-region: no-drag;
+    align-items: center;
+    appearance: none;
+    backdrop-filter: blur(18px);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+      rgba(8, 14, 24, 0.54);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    box-shadow:
+      0 14px 28px rgba(0, 0, 0, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: #eef4ff;
+    cursor: pointer;
+    display: inline-flex;
+    height: 48px;
+    justify-content: center;
+    padding: 0;
+    position: relative;
+    transition:
+      transform 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease;
+    width: 48px;
+  }
+
+  .hallPortraitAudioButton:hover,
+  .hallPortraitAudioButton:focus-visible {
+    border-color: rgba(255, 243, 201, 0.22);
+    box-shadow:
+      0 18px 34px rgba(0, 0, 0, 0.24),
+      0 0 0 1px rgba(255, 243, 201, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
+  }
+
+  .hallPortraitAudioGlyph {
+    display: block;
+    height: 16px;
+    position: relative;
+    width: 18px;
+  }
+
+  .hallPortraitAudioGlyph::before {
+    background: currentColor;
+    clip-path: polygon(0 30%, 36% 30%, 68% 0, 68% 100%, 36% 70%, 0 70%);
+    content: '';
+    height: 16px;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 12px;
+  }
+
+  .hallPortraitAudioGlyph::after {
+    border-color: currentColor;
+    border-radius: 999px;
+    border-style: solid;
+    border-width: 2px 2px 0 0;
+    content: '';
+    height: 8px;
+    position: absolute;
+    right: 0;
+    top: 4px;
+    transform: rotate(45deg);
+    width: 8px;
+  }
+
+  .hallPortraitAudioButtonMuted .hallPortraitAudioGlyph::after {
+    opacity: 0.2;
+  }
+
+  .hallPortraitAudioButtonMuted .hallPortraitAudioGlyph {
+    opacity: 0.92;
+  }
+
+  .hallPortraitAudioButtonMuted .hallPortraitAudioGlyph {
+    position: relative;
+  }
+
+  .hallPortraitAudioButtonMuted .hallPortraitAudioGlyph span {
+    display: none;
+  }
+
+  .hallPortraitAudioButtonMuted::after {
+    background: #ff8d8d;
+    border-radius: 999px;
+    content: '';
+    height: 2px;
+    position: absolute;
+    transform: rotate(-45deg);
+    width: 20px;
   }
 
   .hallPortraitMenu {
@@ -2255,6 +2823,17 @@
     background: rgba(255, 255, 255, 0.06);
     outline: 1px solid rgba(255, 243, 201, 0.22);
     outline-offset: -1px;
+  }
+
+  .hallPortraitMenuItemActive {
+    background: rgba(140, 231, 214, 0.1);
+    color: #8ce7d6;
+  }
+
+  .hallPortraitMenuItem:disabled {
+    cursor: default;
+    opacity: 0.45;
+    transform: none;
   }
 
   @keyframes hallPortraitMenuIn {
@@ -2390,6 +2969,9 @@
   }
 
   .hallFlatHeroCard {
+    --hall-flat-enter-from-x: 28px;
+    --hall-flat-enter-from-rotate: 0deg;
+    --hall-flat-enter-from-scale: 0.97;
     --hall-blur: 0px;
     backdrop-filter: blur(10px);
     border-radius: 30px;
@@ -2425,10 +3007,33 @@
   }
 
   .hallFlatHeroCardLeaving {
+    --hall-flat-leave-from-x: 0px;
+    --hall-flat-leave-from-rotate: 0deg;
+    --hall-flat-leave-from-scale: 1;
+    --hall-flat-leave-from-saturate: 1;
     left: 50%;
     pointer-events: none;
     position: absolute;
     top: 45%;
+  }
+
+  .hallFlatHeroCard.hallTransitionFromDrag.hallTransitionForward {
+    --hall-flat-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * 18px + 8px);
+    --hall-flat-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * -5deg);
+    --hall-flat-enter-from-scale: calc(0.982 + (var(--hall-release-progress-abs) * 0.012));
+  }
+
+  .hallFlatHeroCard.hallTransitionFromDrag.hallTransitionBackward {
+    --hall-flat-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * -18px - 8px);
+    --hall-flat-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * 5deg);
+    --hall-flat-enter-from-scale: calc(0.982 + (var(--hall-release-progress-abs) * 0.012));
+  }
+
+  .hallFlatHeroCardLeaving.hallTransitionFromDrag {
+    --hall-flat-leave-from-x: calc(var(--hall-release-progress) * 96px);
+    --hall-flat-leave-from-rotate: calc(var(--hall-release-progress) * -10deg);
+    --hall-flat-leave-from-scale: calc(1 - (var(--hall-release-progress-abs) * 0.04));
+    --hall-flat-leave-from-saturate: calc(1 - (var(--hall-release-progress-abs) * 0.08));
   }
 
   .hallFlatHeroCard.hallTransitionForward {
@@ -2454,7 +3059,10 @@
   @keyframes hallFlatHeroForward {
     from {
       opacity: 0;
-      transform: translateX(28px) scale(0.97);
+      transform:
+        translateX(var(--hall-flat-enter-from-x))
+        rotateY(var(--hall-flat-enter-from-rotate))
+        scale(var(--hall-flat-enter-from-scale));
       filter: saturate(0.92);
     }
     to {
@@ -2467,7 +3075,10 @@
   @keyframes hallFlatHeroBackward {
     from {
       opacity: 0;
-      transform: translateX(-28px) scale(0.97);
+      transform:
+        translateX(var(--hall-flat-enter-from-x))
+        rotateY(var(--hall-flat-enter-from-rotate))
+        scale(var(--hall-flat-enter-from-scale));
       filter: saturate(0.92);
     }
     to {
@@ -2480,12 +3091,16 @@
   @keyframes hallFlatHeroLeaveForward {
     from {
       opacity: 1;
-      transform: translate(-50%, -50%) translateX(0) scale(1);
-      filter: saturate(1);
+      transform:
+        translate(-50%, -50%)
+        translateX(var(--hall-flat-leave-from-x))
+        rotateY(var(--hall-flat-leave-from-rotate))
+        scale(var(--hall-flat-leave-from-scale));
+      filter: saturate(var(--hall-flat-leave-from-saturate));
     }
     to {
       opacity: 0;
-      transform: translate(-50%, -50%) translateX(-24px) scale(0.98);
+      transform: translate(-50%, -50%) translateX(-40px) rotateY(8deg) scale(0.976);
       filter: saturate(0.9);
     }
   }
@@ -2493,12 +3108,16 @@
   @keyframes hallFlatHeroLeaveBackward {
     from {
       opacity: 1;
-      transform: translate(-50%, -50%) translateX(0) scale(1);
-      filter: saturate(1);
+      transform:
+        translate(-50%, -50%)
+        translateX(var(--hall-flat-leave-from-x))
+        rotateY(var(--hall-flat-leave-from-rotate))
+        scale(var(--hall-flat-leave-from-scale));
+      filter: saturate(var(--hall-flat-leave-from-saturate));
     }
     to {
       opacity: 0;
-      transform: translate(-50%, -50%) translateX(24px) scale(0.98);
+      transform: translate(-50%, -50%) translateX(40px) rotateY(-8deg) scale(0.976);
       filter: saturate(0.9);
     }
   }
