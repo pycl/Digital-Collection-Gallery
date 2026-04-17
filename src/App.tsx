@@ -263,6 +263,57 @@ function usePortraitHallLayout() {
   return portraitLayout
 }
 
+function useViewerControlsVisibility() {
+  const [controlsVisible, setControlsVisible] = useState(false)
+  const hideTimeoutRef = useRef<number | null>(null)
+
+  const clearHideTimeout = useCallback(() => {
+    if (hideTimeoutRef.current !== null) {
+      window.clearTimeout(hideTimeoutRef.current)
+      hideTimeoutRef.current = null
+    }
+  }, [])
+
+  const revealControls = useCallback(
+    (persist = false) => {
+      clearHideTimeout()
+      setControlsVisible(true)
+      if (!persist) {
+        hideTimeoutRef.current = window.setTimeout(() => {
+          setControlsVisible(false)
+          hideTimeoutRef.current = null
+        }, 1400)
+      }
+    },
+    [clearHideTimeout],
+  )
+
+  useEffect(() => () => clearHideTimeout(), [clearHideTimeout])
+
+  const holdControls = useCallback(() => {
+    clearHideTimeout()
+    setControlsVisible(true)
+  }, [clearHideTimeout])
+
+  const releaseControls = useCallback(() => {
+    revealControls(false)
+  }, [revealControls])
+
+  return {
+    controlsVisible,
+    holdControls,
+    releaseControls,
+    controlVisibilityProps: {
+      onPointerMove: () => revealControls(false),
+      onPointerDown: () => revealControls(true),
+      onPointerUp: () => revealControls(false),
+      onPointerLeave: () => revealControls(false),
+      onFocusCapture: () => revealControls(true),
+      onBlurCapture: () => revealControls(false),
+    },
+  }
+}
+
 type ResolvedFeaturedEntry = {
   entry: FeaturedEntry
   collection: CollectionRecord
@@ -363,6 +414,14 @@ function getCircularOffset(index: number, activeIndex: number, length: number) {
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function normalizeIntervalSeconds(value: number, fallback: number) {
+  if (!Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(2, Math.round(value))
 }
 
 type HallViewportAction =
@@ -484,12 +543,14 @@ function HallMediaPreview({
   alt,
   active,
   muted = true,
+  paused = false,
 }: {
   asset: GalleryAsset | null
   assets: GalleryAsset[]
   alt: string
   active: boolean
   muted?: boolean
+  paused?: boolean
 }) {
   if (!asset) {
     return <div className="featuredPlaceholder">No art</div>
@@ -497,15 +558,34 @@ function HallMediaPreview({
 
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, assets)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const imageProps = {
     alt,
     draggable: false,
     onDragStart: (event: ReactDragEvent<HTMLImageElement>) => event.preventDefault(),
   }
 
+  useEffect(() => {
+    if (asset.type !== 'video' || !videoRef.current || (!active && previewImageUrl)) {
+      return
+    }
+
+    const videoElement = videoRef.current
+
+    if (paused) {
+      videoElement.pause()
+      return
+    }
+
+    const playPromise = videoElement.play()
+    if (playPromise) {
+      void playPromise.catch(() => {})
+    }
+  }, [active, asset.path, asset.type, muted, paused, previewImageUrl])
+
   if (asset.type === 'video') {
     if (active || !previewImageUrl) {
-      return <video autoPlay loop muted={muted} playsInline preload="metadata" src={assetUrl} />
+      return <video autoPlay loop muted={muted} playsInline preload="metadata" ref={videoRef} src={assetUrl} />
     }
 
     return <img {...imageProps} src={previewImageUrl} />
@@ -1604,6 +1684,7 @@ function HallPage() {
                               asset={activeEntry.asset}
                               assets={activeEntry.collection.assets}
                               muted={galleryState.config.bannerVideoMuted}
+                              paused={hallFullscreen}
                             />
                           </div>
                         </div>
@@ -1791,6 +1872,7 @@ function HallPage() {
                               asset={activeEntry.asset}
                               assets={activeEntry.collection.assets}
                               muted={galleryState.config.bannerVideoMuted}
+                              paused={hallFullscreen}
                             />
                           </div>
                         </div>
@@ -1980,7 +2062,6 @@ function HallPage() {
 
       {hallFullscreen && activeEntry?.asset ? (
         <HallFullscreenOverlay
-          config={galleryState.config}
           mediaType={activeEntry.asset?.type ?? null}
           muted={galleryState.config.bannerVideoMuted}
           onNext={showNext}
@@ -3517,6 +3598,7 @@ function FeaturedFullscreenOverlay({
 }) {
   usePageScrollLock(true)
   const [isMuted, setIsMuted] = useState(muted)
+  const { controlsVisible, controlVisibilityProps, holdControls, releaseControls } = useViewerControlsVisibility()
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -3530,24 +3612,38 @@ function FeaturedFullscreenOverlay({
   }, [onClose])
 
   return (
-    <div className="viewerOverlay" role="dialog" aria-modal="true" onWheel={(event) => event.preventDefault()}>
+    <div
+      className={`viewerOverlay ${controlsVisible ? 'viewerControlsVisible' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      onWheel={(event) => event.preventDefault()}
+      {...controlVisibilityProps}
+    >
       <div className="featuredFullscreenBackdrop" onClick={onClose} />
 
       <div className="featuredFullscreenShell">
         {mediaType === 'video' ? (
-          <button
-            aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-            className="viewerAudioToggle"
-            type="button"
-            onClick={() => setIsMuted((current) => !current)}
+          <div
+            className="viewerControlRail"
+            onPointerEnter={holdControls}
+            onPointerLeave={releaseControls}
           >
-            {isMuted ? 'Unmute' : 'Mute'}
-          </button>
+            <button
+              aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+              className={`viewerAudioToggle ${isMuted ? 'viewerAudioToggleMuted' : ''}`}
+              type="button"
+              onClick={() => setIsMuted((current) => !current)}
+            >
+              <span aria-hidden="true" className="viewerAudioGlyph" />
+            </button>
+          </div>
         ) : null}
         <button
           aria-label={`Close featured view for ${collection.displayName}`}
           className="featuredFullscreenClose"
           type="button"
+          onPointerEnter={holdControls}
+          onPointerLeave={releaseControls}
           onClick={onClose}
         >
           脳
@@ -3576,7 +3672,6 @@ function FeaturedFullscreenOverlay({
 }
 
 function HallFullscreenOverlay({
-  config,
   title,
   src,
   mediaType,
@@ -3584,7 +3679,6 @@ function HallFullscreenOverlay({
   onNext,
   onClose,
 }: {
-  config: GalleryState['config']
   title: string
   src: string
   mediaType: 'image' | 'video' | null
@@ -3592,8 +3686,14 @@ function HallFullscreenOverlay({
   onNext: () => void
   onClose: () => void
 }) {
+  const { busy, updateConfig, galleryState } = useGallery()
   usePageScrollLock(true)
   const [isMuted, setIsMuted] = useState(muted)
+  const [slideshowOverride, setSlideshowOverride] = useState<boolean | null>(null)
+  const { controlsVisible, controlVisibilityProps, holdControls, releaseControls } = useViewerControlsVisibility()
+  const viewerConfig = galleryState.config
+  const slideshowEnabled = slideshowOverride ?? viewerConfig.fullscreenSlideshowEnabled
+  const slideshowIntervalSeconds = normalizeIntervalSeconds(viewerConfig.fullscreenSlideshowIntervalSeconds, 6)
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -3607,51 +3707,81 @@ function HallFullscreenOverlay({
   }, [onClose])
 
   useEffect(() => {
-    if (!config.fullscreenSlideshowEnabled) {
+    if (!viewerConfig.fullscreenSlideshowEnabled) {
       return
     }
 
-    if (mediaType === 'video' && config.fullscreenVideoAdvanceOnEnded) {
+    if (mediaType === 'video' && viewerConfig.fullscreenVideoAdvanceOnEnded) {
       return
     }
 
     const timeoutId = window.setTimeout(() => {
       onNext()
-    }, config.fullscreenSlideshowIntervalSeconds * 1000)
+    }, slideshowIntervalSeconds * 1000)
 
     return () => window.clearTimeout(timeoutId)
   }, [
-    config.fullscreenSlideshowEnabled,
-    config.fullscreenSlideshowIntervalSeconds,
-    config.fullscreenVideoAdvanceOnEnded,
     mediaType,
     onNext,
     src,
+    viewerConfig.fullscreenSlideshowEnabled,
+    viewerConfig.fullscreenVideoAdvanceOnEnded,
+    slideshowIntervalSeconds,
   ])
+
+  async function handleToggleSlideshow() {
+    const nextEnabled = !slideshowEnabled
+    setSlideshowOverride(nextEnabled)
+    try {
+      await updateConfig({ fullscreenSlideshowEnabled: nextEnabled })
+    } catch {
+      setSlideshowOverride(null)
+      return
+    }
+    setSlideshowOverride(null)
+  }
 
   return (
     <div
-      className="viewerOverlay hallFullscreenOverlay"
+      className={`viewerOverlay hallFullscreenOverlay ${controlsVisible ? 'viewerControlsVisible' : ''}`}
       role="dialog"
       aria-modal="true"
       onWheel={(event) => event.preventDefault()}
+      {...controlVisibilityProps}
     >
       <div className="hallFullscreenBackdrop" onClick={onClose} />
       <div className="hallFullscreenShell">
-        {mediaType === 'video' ? (
+        <div
+          className="viewerControlRail"
+          onPointerEnter={holdControls}
+          onPointerLeave={releaseControls}
+        >
           <button
-            aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-            className="viewerAudioToggle"
+            aria-label={slideshowEnabled ? 'Disable slideshow' : 'Enable slideshow'}
+            className={`viewerSlideshowToggle ${slideshowEnabled ? 'viewerSlideshowToggleActive' : 'viewerSlideshowToggleInactive'}`}
+            disabled={busy}
             type="button"
-            onClick={() => setIsMuted((current) => !current)}
+            onClick={() => void handleToggleSlideshow()}
           >
-            {isMuted ? 'Unmute' : 'Mute'}
+            <span aria-hidden="true" className="viewerSlideshowGlyph" />
           </button>
-        ) : null}
+          {mediaType === 'video' ? (
+            <button
+              aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+              className={`viewerAudioToggle ${isMuted ? 'viewerAudioToggleMuted' : ''}`}
+              type="button"
+              onClick={() => setIsMuted((current) => !current)}
+            >
+              <span aria-hidden="true" className="viewerAudioGlyph" />
+            </button>
+          ) : null}
+        </div>
         <button
           aria-label={`Close fullscreen view for ${title}`}
           className="featuredFullscreenClose"
           type="button"
+          onPointerEnter={holdControls}
+          onPointerLeave={releaseControls}
           onClick={onClose}
         />
 
@@ -3661,10 +3791,10 @@ function HallFullscreenOverlay({
               autoPlay
               className="hallFullscreenMedia"
               controls={false}
-              loop={!config.fullscreenSlideshowEnabled || !config.fullscreenVideoAdvanceOnEnded}
+              loop={!viewerConfig.fullscreenSlideshowEnabled || !viewerConfig.fullscreenVideoAdvanceOnEnded}
               muted={isMuted}
               onEnded={() => {
-                if (config.fullscreenSlideshowEnabled && config.fullscreenVideoAdvanceOnEnded) {
+                if (viewerConfig.fullscreenSlideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded) {
                   onNext()
                 }
               }}
@@ -3891,7 +4021,6 @@ function CollectionDetailPage() {
           asset={activeAsset}
           assetIndex={activeViewerState?.assetIndex ?? 0}
           collection={viewerCollection ?? resolvedCollection}
-          config={galleryState.config}
           onClose={() => setActiveViewerState(null)}
           onNext={() =>
             setActiveViewerState((currentState) =>
@@ -4042,7 +4171,6 @@ function FullscreenViewer({
   asset,
   assetIndex,
   collection,
-  config,
   onClose,
   onNext,
   onPrevious,
@@ -4052,73 +4180,110 @@ function FullscreenViewer({
   asset: GalleryAsset
   assetIndex: number
   collection: CollectionRecord
-  config: GalleryState['config']
   onClose: () => void
   onNext: () => void
   onPrevious: () => void
   onAutoAdvance?: () => void
   onSelect: (index: number) => void
 }) {
+  const { busy, updateConfig, galleryState } = useGallery()
   usePageScrollLock(true)
   const [mutedByAssetPath, setMutedByAssetPath] = useState<Record<string, boolean>>({})
+  const [slideshowOverride, setSlideshowOverride] = useState<boolean | null>(null)
+  const { controlsVisible, controlVisibilityProps, holdControls, releaseControls } = useViewerControlsVisibility()
+  const viewerConfig = galleryState.config
 
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, collection.assets)
   const isMuted = mutedByAssetPath[asset.path] ?? false
+  const slideshowEnabled = slideshowOverride ?? viewerConfig.fullscreenSlideshowEnabled
+  const slideshowIntervalSeconds = normalizeIntervalSeconds(viewerConfig.fullscreenSlideshowIntervalSeconds, 6)
 
   useEffect(() => {
-    if (!config.fullscreenSlideshowEnabled) {
+    if (!viewerConfig.fullscreenSlideshowEnabled) {
       return
     }
 
-    if (asset.type === 'video' && config.fullscreenVideoAdvanceOnEnded) {
+    if (asset.type === 'video' && viewerConfig.fullscreenVideoAdvanceOnEnded) {
       return
     }
 
     const timeoutId = window.setTimeout(() => {
-      if (config.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
+      if (viewerConfig.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
         onAutoAdvance()
         return
       }
 
       onNext()
-    }, config.fullscreenSlideshowIntervalSeconds * 1000)
+    }, slideshowIntervalSeconds * 1000)
 
     return () => window.clearTimeout(timeoutId)
   }, [
     asset.path,
     asset.type,
-    config.fullscreenSlideshowEnabled,
-    config.fullscreenSlideshowIntervalSeconds,
-    config.fullscreenVideoAdvanceOnEnded,
-    config.fullscreenSlideshowShuffleAllCollections,
     onNext,
     onAutoAdvance,
+    viewerConfig.fullscreenSlideshowEnabled,
+    viewerConfig.fullscreenVideoAdvanceOnEnded,
+    viewerConfig.fullscreenSlideshowShuffleAllCollections,
+    slideshowIntervalSeconds,
   ])
 
+  async function handleToggleSlideshow() {
+    const nextEnabled = !slideshowEnabled
+    setSlideshowOverride(nextEnabled)
+    try {
+      await updateConfig({ fullscreenSlideshowEnabled: nextEnabled })
+    } catch {
+      setSlideshowOverride(null)
+      return
+    }
+    setSlideshowOverride(null)
+  }
+
   return (
-    <div className="viewerOverlay" role="dialog" aria-modal="true" onWheel={(event) => event.preventDefault()}>
+    <div
+      className={`viewerOverlay ${controlsVisible ? 'viewerControlsVisible' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      onWheel={(event) => event.preventDefault()}
+      {...controlVisibilityProps}
+    >
       <div className="viewerBackdrop" onClick={onClose} />
 
       <div className="viewerShell">
         <div className="viewerTopLayer">
-          {asset.type === 'video' ? (
+          <div
+            className="viewerControlRail"
+            onPointerEnter={holdControls}
+            onPointerLeave={releaseControls}
+          >
             <button
-              aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-              className="viewerAudioToggle"
+              aria-label={slideshowEnabled ? 'Disable slideshow' : 'Enable slideshow'}
+              className={`viewerSlideshowToggle ${slideshowEnabled ? 'viewerSlideshowToggleActive' : 'viewerSlideshowToggleInactive'}`}
+              disabled={busy}
               type="button"
-              onClick={() =>
-                setMutedByAssetPath((current) => ({
-                  ...current,
-                  [asset.path]: !(current[asset.path] ?? false),
-                }))
-              }
+              onClick={() => void handleToggleSlideshow()}
             >
-              {isMuted ? 'Unmute' : 'Mute'}
+              <span aria-hidden="true" className="viewerSlideshowGlyph" />
             </button>
-          ) : (
-            <div className="viewerActionSpacer" />
-          )}
+            {asset.type === 'video' ? (
+              <button
+                aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+                className={`viewerAudioToggle ${isMuted ? 'viewerAudioToggleMuted' : ''}`}
+                type="button"
+                onClick={() =>
+                  setMutedByAssetPath((current) => ({
+                    ...current,
+                    [asset.path]: !(current[asset.path] ?? false),
+                  }))
+                }
+              >
+                <span aria-hidden="true" className="viewerAudioGlyph" />
+              </button>
+            ) : null}
+          </div>
+          <div className="viewerActionSpacer" />
           <div className="viewerInfoCard">
             <p className="sectionTag">Collection Viewer</p>
             <strong className="viewerTitle">{collection.displayName}</strong>
@@ -4126,7 +4291,14 @@ function FullscreenViewer({
               {assetIndex + 1} / {collection.assets.length} · {asset.name}
             </p>
           </div>
-          <button aria-label="Close viewer" className="featuredFullscreenClose" type="button" onClick={onClose} />
+          <button
+            aria-label="Close viewer"
+            className="featuredFullscreenClose"
+            type="button"
+            onPointerEnter={holdControls}
+            onPointerLeave={releaseControls}
+            onClick={onClose}
+          />
         </div>
 
         <div className="viewerStage">
@@ -4141,10 +4313,10 @@ function FullscreenViewer({
                 autoPlay
                 className="viewerVideo"
                 controls
-                loop={!config.fullscreenSlideshowEnabled || !config.fullscreenVideoAdvanceOnEnded}
+                loop={!viewerConfig.fullscreenSlideshowEnabled || !viewerConfig.fullscreenVideoAdvanceOnEnded}
                 onEnded={() => {
-                  if (config.fullscreenSlideshowEnabled && config.fullscreenVideoAdvanceOnEnded) {
-                    if (config.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
+                  if (viewerConfig.fullscreenSlideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded) {
+                    if (viewerConfig.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
                       onAutoAdvance()
                       return
                     }

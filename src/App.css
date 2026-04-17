@@ -2001,6 +2001,7 @@
 }
 
 .viewerOverlay {
+  -webkit-app-region: no-drag;
   inset: 0;
   overflow: hidden;
   overscroll-behavior: none;
@@ -2008,7 +2009,27 @@
   z-index: 1000;
 }
 
-.viewerAudioToggle {
+.viewerControlRail {
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 10px;
+  left: 24px;
+  margin: -6px;
+  opacity: 0;
+  padding: 6px;
+  pointer-events: none;
+  position: absolute;
+  top: 24px;
+  transform: translateY(-6px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  z-index: 2;
+}
+
+.viewerAudioToggle,
+.viewerSlideshowToggle {
+  -webkit-app-region: no-drag;
   align-items: center;
   appearance: none;
   background: rgba(255, 255, 255, 0.08);
@@ -2017,20 +2038,132 @@
   color: #eef4ff;
   cursor: pointer;
   display: inline-flex;
-  font: inherit;
   justify-content: center;
-  min-height: 44px;
-  min-width: 96px;
-  opacity: 0;
-  padding: 0 16px;
-  position: absolute;
-  left: 24px;
-  top: 24px;
-  transform: translateY(-6px);
+  height: 48px;
+  padding: 0;
+  position: relative;
   transition:
-    opacity 160ms ease,
-    transform 160ms ease;
-  z-index: 2;
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+  width: 48px;
+}
+
+.viewerAudioToggle:hover,
+.viewerAudioToggle:focus-visible,
+.viewerSlideshowToggle:hover,
+.viewerSlideshowToggle:focus-visible {
+  border-color: rgba(140, 231, 214, 0.34);
+  color: #eefcff;
+  transform: translateY(-1px);
+}
+
+.viewerAudioGlyph,
+.viewerSlideshowGlyph {
+  display: block;
+  position: relative;
+}
+
+.viewerAudioGlyph {
+  height: 16px;
+  width: 18px;
+}
+
+.viewerAudioGlyph::before {
+  background: currentColor;
+  clip-path: polygon(0 30%, 36% 30%, 68% 0, 68% 100%, 36% 70%, 0 70%);
+  content: '';
+  height: 16px;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 12px;
+}
+
+.viewerAudioGlyph::after {
+  border-color: currentColor;
+  border-radius: 999px;
+  border-style: solid;
+  border-width: 2px 2px 0 0;
+  content: '';
+  height: 8px;
+  position: absolute;
+  right: 0;
+  top: 4px;
+  transform: rotate(45deg);
+  width: 8px;
+}
+
+.viewerAudioToggleMuted .viewerAudioGlyph::after {
+  opacity: 0.2;
+}
+
+.viewerAudioToggleMuted::after {
+  background: #ff8d8d;
+  border-radius: 999px;
+  content: '';
+  height: 2px;
+  position: absolute;
+  transform: rotate(-45deg);
+  width: 20px;
+}
+
+.viewerSlideshowGlyph {
+  height: 18px;
+  width: 18px;
+}
+
+.viewerSlideshowGlyph::before {
+  border: 2px solid currentColor;
+  border-left-color: transparent;
+  border-radius: 999px;
+  box-sizing: border-box;
+  content: '';
+  height: 16px;
+  left: 1px;
+  position: absolute;
+  top: 1px;
+  transform: rotate(42deg);
+  width: 16px;
+}
+
+.viewerSlideshowGlyph::after {
+  border-right: 2px solid currentColor;
+  border-top: 2px solid currentColor;
+  content: '';
+  height: 6px;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transform: rotate(12deg);
+  width: 6px;
+}
+
+.viewerSlideshowToggleActive {
+  background:
+    linear-gradient(180deg, rgba(140, 231, 214, 0.16), rgba(140, 231, 214, 0.08)),
+    rgba(255, 255, 255, 0.08);
+  border-color: rgba(140, 231, 214, 0.26);
+  color: #8ce7d6;
+}
+
+.viewerSlideshowToggleInactive::after {
+  background: #ff8d8d;
+  border-radius: 999px;
+  content: '';
+  height: 2px;
+  position: absolute;
+  transform: rotate(-45deg);
+  width: 20px;
+}
+
+.viewerSlideshowToggle:disabled,
+.viewerSlideshowToggle:disabled:hover {
+  cursor: default;
+  opacity: 0.55;
+  transform: none;
 }
 
 .viewerBackdrop {
@@ -2142,6 +2275,7 @@
 }
 
 .featuredFullscreenClose {
+  -webkit-app-region: no-drag;
   align-items: center;
   appearance: none;
   background: rgba(255, 255, 255, 0.08);
@@ -2163,6 +2297,7 @@
   width: 56px;
   z-index: 2;
   opacity: 0;
+  pointer-events: none;
 }
 
 .featuredFullscreenClose::before {
@@ -2171,11 +2306,12 @@
   line-height: 1;
 }
 
-.viewerOverlay:hover .featuredFullscreenClose,
+.viewerOverlay.viewerControlsVisible .featuredFullscreenClose,
 .viewerOverlay:focus-within .featuredFullscreenClose,
-.viewerOverlay:hover .viewerAudioToggle,
-.viewerOverlay:focus-within .viewerAudioToggle {
+.viewerOverlay.viewerControlsVisible .viewerControlRail,
+.viewerOverlay:focus-within .viewerControlRail {
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(0);
 }
 
@@ -2359,11 +2495,13 @@
 
   .featuredFullscreenClose {
     opacity: 1;
+    pointer-events: auto;
     transform: translateY(0);
   }
 
-  .viewerAudioToggle {
+  .viewerControlRail {
     opacity: 1;
+    pointer-events: auto;
     transform: translateY(0);
   }
 

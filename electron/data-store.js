@@ -65,6 +65,14 @@ function normalizeUiScale(value) {
   return Math.min(1.25, Math.max(0.75, Math.round(value * 100) / 100))
 }
 
+function normalizeIntervalSeconds(value, fallback) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(2, Math.round(value))
+}
+
 async function ensureDataDir() {
   await fs.mkdir(getDataDir(), { recursive: true })
 }
@@ -110,6 +118,11 @@ export async function readConfig() {
     ...defaultConfig,
     ...saved,
     uiScale: normalizeUiScale(saved.uiScale),
+    bannerIntervalSeconds: normalizeIntervalSeconds(saved.bannerIntervalSeconds, defaultConfig.bannerIntervalSeconds),
+    fullscreenSlideshowIntervalSeconds: normalizeIntervalSeconds(
+      saved.fullscreenSlideshowIntervalSeconds,
+      defaultConfig.fullscreenSlideshowIntervalSeconds,
+    ),
     importPaths: Array.isArray(saved.importPaths) ? saved.importPaths : [],
     featuredEntries,
   }
@@ -331,7 +344,10 @@ export async function updateAppConfig(updates) {
   }
 
   if (typeof updates.bannerIntervalSeconds === 'number' && Number.isFinite(updates.bannerIntervalSeconds)) {
-    nextConfig.bannerIntervalSeconds = Math.max(2, Math.round(updates.bannerIntervalSeconds))
+    nextConfig.bannerIntervalSeconds = normalizeIntervalSeconds(
+      updates.bannerIntervalSeconds,
+      defaultConfig.bannerIntervalSeconds,
+    )
   }
 
   if (typeof updates.uiScale === 'number' && Number.isFinite(updates.uiScale)) {
@@ -350,9 +366,9 @@ export async function updateAppConfig(updates) {
     typeof updates.fullscreenSlideshowIntervalSeconds === 'number' &&
     Number.isFinite(updates.fullscreenSlideshowIntervalSeconds)
   ) {
-    nextConfig.fullscreenSlideshowIntervalSeconds = Math.max(
-      2,
-      Math.round(updates.fullscreenSlideshowIntervalSeconds),
+    nextConfig.fullscreenSlideshowIntervalSeconds = normalizeIntervalSeconds(
+      updates.fullscreenSlideshowIntervalSeconds,
+      defaultConfig.fullscreenSlideshowIntervalSeconds,
     )
   }
 
