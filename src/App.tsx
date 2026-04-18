@@ -25,6 +25,7 @@ const emptyState: GalleryState = {
     fullscreenSlideshowEnabled: false,
     fullscreenSlideshowIntervalSeconds: 6,
     fullscreenVideoAdvanceOnEnded: true,
+    fullscreenVideoWaitingBehavior: 'replay',
     fullscreenSlideshowShuffleAllCollections: false,
     collectionsSort: 'id_asc',
   },
@@ -48,6 +49,7 @@ type GalleryContextValue = {
     fullscreenSlideshowEnabled?: boolean
     fullscreenSlideshowIntervalSeconds?: number
     fullscreenVideoAdvanceOnEnded?: boolean
+    fullscreenVideoWaitingBehavior?: 'replay' | 'pause'
     fullscreenSlideshowShuffleAllCollections?: boolean
   }) => Promise<void>
   updateCollection: (
@@ -455,13 +457,11 @@ function FeaturedBannerMedia({
   assets,
   muted,
   paused,
-  onVideoEnded,
 }: {
   asset: GalleryAsset
   assets: GalleryAsset[]
   muted: boolean
   paused: boolean
-  onVideoEnded: () => void
 }) {
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, assets)
@@ -521,9 +521,9 @@ function FeaturedBannerMedia({
         autoPlay
         className={`featuredBannerVideo ${videoReady ? 'featuredBannerVideoReady' : ''}`}
         controls={false}
+        loop
         muted={muted}
         onCanPlay={() => setVideoReady(true)}
-        onEnded={onVideoEnded}
         onError={() => setVideoReady(false)}
         onLoadedData={() => setVideoReady(true)}
         onPlaying={() => setVideoReady(true)}
@@ -544,6 +544,8 @@ function HallMediaPreview({
   active,
   muted = true,
   paused = false,
+  loopVideos = true,
+  onVideoEnded,
 }: {
   asset: GalleryAsset | null
   assets: GalleryAsset[]
@@ -551,6 +553,8 @@ function HallMediaPreview({
   active: boolean
   muted?: boolean
   paused?: boolean
+  loopVideos?: boolean
+  onVideoEnded?: () => void
 }) {
   if (!asset) {
     return <div className="featuredPlaceholder">No art</div>
@@ -585,7 +589,18 @@ function HallMediaPreview({
 
   if (asset.type === 'video') {
     if (active || !previewImageUrl) {
-      return <video autoPlay loop muted={muted} playsInline preload="metadata" ref={videoRef} src={assetUrl} />
+      return (
+        <video
+          autoPlay
+          loop={loopVideos}
+          muted={muted}
+          onEnded={onVideoEnded}
+          playsInline
+          preload="metadata"
+          ref={videoRef}
+          src={assetUrl}
+        />
+      )
     }
 
     return <img {...imageProps} src={previewImageUrl} />
@@ -645,14 +660,6 @@ function HomePage() {
     setActiveFeaturedIndex((currentIndex) =>
       featuredEntries.length === 0 ? 0 : (currentIndex + 1) % featuredEntries.length,
     )
-  }
-
-  function handleFeaturedVideoEnded() {
-    if (featuredFullscreen || featuredEntries.length <= 1 || featuredMediaType !== 'video') {
-      return
-    }
-
-    showNextFeatured()
   }
 
   return (
@@ -769,7 +776,6 @@ function HomePage() {
                         assets={featuredCollection?.assets ?? []}
                         key={featuredAsset.path}
                         muted={galleryState.config.bannerVideoMuted}
-                        onVideoEnded={handleFeaturedVideoEnded}
                         paused={featuredFullscreen}
                       />
                     ) : (
@@ -975,6 +981,11 @@ function HallPage() {
   const hallDragAbsProgress = Math.abs(hallDragProgress)
   const hallDragForwardProgress = Math.max(0, -hallDragProgress)
   const hallDragBackwardProgress = Math.max(0, hallDragProgress)
+  const hallRotationIntervalSeconds = normalizeIntervalSeconds(galleryState.config.bannerIntervalSeconds, 8)
+  const hallVideoAdvanceOnEnded = galleryState.config.fullscreenVideoAdvanceOnEnded
+  const hallVideoWaitingBehavior = galleryState.config.fullscreenVideoWaitingBehavior
+  const [hallVideoAdvanceReady, setHallVideoAdvanceReady] = useState(false)
+  const [hallVideoEndedBeforeAdvance, setHallVideoEndedBeforeAdvance] = useState(false)
   const {
     title: transitionTitle,
     cardName: transitionCardName,
@@ -1082,20 +1093,103 @@ function HallPage() {
       return
     }
 
+    if (activeEntry?.asset?.type === 'video' && hallVideoAdvanceOnEnded) {
+      return
+    }
+
     const timeoutId = window.setTimeout(() => {
       showNext()
-    }, galleryState.config.bannerIntervalSeconds * 1000)
+    }, hallRotationIntervalSeconds * 1000)
 
     return () => window.clearTimeout(timeoutId)
   }, [
     activeIndex,
+    activeEntry?.asset?.type,
     autoRotatePaused,
     featuredEntries.length,
-    galleryState.config.bannerIntervalSeconds,
+    hallRotationIntervalSeconds,
+    hallVideoAdvanceOnEnded,
     hallRotationEnabled,
     hallFullscreen,
     showNext,
   ])
+
+  useEffect(() => {
+    if (
+      !hallRotationEnabled ||
+      featuredEntries.length <= 1 ||
+      hallFullscreen ||
+      activeEntry?.asset?.type !== 'video' ||
+      !hallVideoAdvanceOnEnded
+    ) {
+      setHallVideoAdvanceReady(false)
+      setHallVideoEndedBeforeAdvance(false)
+      return
+    }
+
+    setHallVideoAdvanceReady(false)
+    setHallVideoEndedBeforeAdvance(false)
+
+    const timeoutId = window.setTimeout(() => {
+      setHallVideoAdvanceReady(true)
+    }, hallRotationIntervalSeconds * 1000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    activeEntry?.asset?.path,
+    activeEntry?.asset?.type,
+    featuredEntries.length,
+    hallFullscreen,
+    hallRotationEnabled,
+    hallRotationIntervalSeconds,
+    hallVideoAdvanceOnEnded,
+  ])
+
+  useEffect(() => {
+    if (
+      !hallRotationEnabled ||
+      featuredEntries.length <= 1 ||
+      hallFullscreen ||
+      activeEntry?.asset?.type !== 'video' ||
+      !hallVideoAdvanceOnEnded ||
+      hallVideoWaitingBehavior !== 'pause' ||
+      !hallVideoAdvanceReady ||
+      !hallVideoEndedBeforeAdvance
+    ) {
+      return
+    }
+
+    showNext()
+  }, [
+    activeEntry?.asset?.type,
+    featuredEntries.length,
+    hallFullscreen,
+    hallRotationEnabled,
+    hallVideoAdvanceOnEnded,
+    hallVideoAdvanceReady,
+    hallVideoEndedBeforeAdvance,
+    hallVideoWaitingBehavior,
+    showNext,
+  ])
+
+  function handleActiveHallVideoEnded() {
+    if (!hallRotationEnabled || featuredEntries.length <= 1 || hallFullscreen) {
+      return
+    }
+
+    if (!hallVideoAdvanceOnEnded) {
+      return
+    }
+
+    if (hallVideoAdvanceReady) {
+      showNext()
+      return
+    }
+
+    if (hallVideoWaitingBehavior === 'pause') {
+      setHallVideoEndedBeforeAdvance(true)
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1683,7 +1777,14 @@ function HallPage() {
                               alt={activeTitle}
                               asset={activeEntry.asset}
                               assets={activeEntry.collection.assets}
+                              loopVideos={
+                                activeEntry.asset?.type !== 'video' ||
+                                !hallRotationEnabled ||
+                                !hallVideoAdvanceOnEnded ||
+                                (hallVideoWaitingBehavior === 'replay' && !hallVideoAdvanceReady)
+                              }
                               muted={galleryState.config.bannerVideoMuted}
+                              onVideoEnded={handleActiveHallVideoEnded}
                               paused={hallFullscreen}
                             />
                           </div>
@@ -1871,7 +1972,14 @@ function HallPage() {
                               alt={activeTitle}
                               asset={activeEntry.asset}
                               assets={activeEntry.collection.assets}
+                              loopVideos={
+                                activeEntry.asset?.type !== 'video' ||
+                                !hallRotationEnabled ||
+                                !hallVideoAdvanceOnEnded ||
+                                (hallVideoWaitingBehavior === 'replay' && !hallVideoAdvanceReady)
+                              }
                               muted={galleryState.config.bannerVideoMuted}
+                              onVideoEnded={handleActiveHallVideoEnded}
                               paused={hallFullscreen}
                             />
                           </div>
@@ -2105,13 +2213,6 @@ function SettingsPage() {
           onSave={updateConfig}
         />
 
-        <ViewerSettingsSection
-          bridgeReady={bridgeReady}
-          busy={busy}
-          config={galleryState.config}
-          onSave={updateConfig}
-        />
-
         <section className="gridPanel settingsPanel">
           <div className="panelHeader">
             <div>
@@ -2123,8 +2224,8 @@ function SettingsPage() {
           <article className="settingsTextPanel hallSettingsShortcutCard">
             <div className="settingsBody">
               <p className="subtitle">
-                The featured hall card builder controls what appears in the exhibition view. Open the
-                dedicated settings page to edit entries, media, rotation timing, and preview each card.
+                Open the dedicated Hall Settings page to edit featured entries, hall rotation, fullscreen playback
+                behavior, and preview each card in one place.
               </p>
               <div className="settingsActions">
                 <button
@@ -2281,157 +2382,6 @@ function DisplaySettingsSection({
   )
 }
 
-function ViewerSettingsSection({
-  config,
-  busy,
-  bridgeReady,
-  onSave,
-}: {
-  config: GalleryState['config']
-  busy: boolean
-  bridgeReady: boolean
-  onSave: (updates: {
-    fullscreenSlideshowEnabled?: boolean
-    fullscreenSlideshowIntervalSeconds?: number
-    fullscreenVideoAdvanceOnEnded?: boolean
-    fullscreenSlideshowShuffleAllCollections?: boolean
-  }) => Promise<void>
-}) {
-  const [fullscreenSlideshowEnabled, setFullscreenSlideshowEnabled] = useState(config.fullscreenSlideshowEnabled)
-  const [fullscreenSlideshowIntervalSeconds, setFullscreenSlideshowIntervalSeconds] = useState(
-    String(config.fullscreenSlideshowIntervalSeconds),
-  )
-  const [fullscreenVideoAdvanceOnEnded, setFullscreenVideoAdvanceOnEnded] = useState(
-    config.fullscreenVideoAdvanceOnEnded,
-  )
-  const [fullscreenSlideshowShuffleAllCollections, setFullscreenSlideshowShuffleAllCollections] = useState(
-    config.fullscreenSlideshowShuffleAllCollections,
-  )
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
-    setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
-    setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
-    setFullscreenSlideshowShuffleAllCollections(config.fullscreenSlideshowShuffleAllCollections)
-  }, [
-    config.fullscreenSlideshowEnabled,
-    config.fullscreenSlideshowIntervalSeconds,
-    config.fullscreenVideoAdvanceOnEnded,
-    config.fullscreenSlideshowShuffleAllCollections,
-  ])
-
-  const normalizedInterval = Number(fullscreenSlideshowIntervalSeconds)
-  const isDirty =
-    fullscreenSlideshowEnabled !== config.fullscreenSlideshowEnabled ||
-    normalizedInterval !== config.fullscreenSlideshowIntervalSeconds ||
-    fullscreenVideoAdvanceOnEnded !== config.fullscreenVideoAdvanceOnEnded ||
-    fullscreenSlideshowShuffleAllCollections !== config.fullscreenSlideshowShuffleAllCollections
-
-  async function handleSave() {
-    setSaving(true)
-    try {
-      await onSave({
-        fullscreenSlideshowEnabled,
-        fullscreenSlideshowIntervalSeconds: Number.isFinite(normalizedInterval)
-          ? normalizedInterval
-          : config.fullscreenSlideshowIntervalSeconds,
-        fullscreenVideoAdvanceOnEnded,
-        fullscreenSlideshowShuffleAllCollections,
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <section className="gridPanel settingsPanel">
-      <div className="panelHeader">
-        <div>
-          <p className="sectionTag">Viewer Settings</p>
-          <h2>Fullscreen Viewer Behavior</h2>
-        </div>
-      </div>
-
-      <article className="settingsTextPanel">
-        <div className="settingsBody">
-          <label className="settingsToggle">
-            <input
-              checked={fullscreenSlideshowEnabled}
-              type="checkbox"
-              onChange={(event) => setFullscreenSlideshowEnabled(event.target.checked)}
-            />
-            <span>Enable fullscreen slideshow</span>
-          </label>
-
-          <label className="settingsField">
-            <span>Slideshow Interval Seconds</span>
-            <input
-              className="settingsInput"
-              disabled={!fullscreenSlideshowEnabled}
-              min="2"
-              step="1"
-              type="number"
-              value={fullscreenSlideshowIntervalSeconds}
-              onChange={(event) => setFullscreenSlideshowIntervalSeconds(event.target.value)}
-            />
-          </label>
-
-          <label className="settingsToggle">
-            <input
-              checked={fullscreenVideoAdvanceOnEnded}
-              disabled={!fullscreenSlideshowEnabled}
-              type="checkbox"
-              onChange={(event) => setFullscreenVideoAdvanceOnEnded(event.target.checked)}
-            />
-            <span>When fullscreen media is a video, continue on video end instead of waiting for the timer</span>
-          </label>
-
-          <label className="settingsToggle">
-            <input
-              checked={fullscreenSlideshowShuffleAllCollections}
-              disabled={!fullscreenSlideshowEnabled}
-              type="checkbox"
-              onChange={(event) => setFullscreenSlideshowShuffleAllCollections(event.target.checked)}
-            />
-            <span>When slideshow is enabled, randomly continue with media from all imported collections</span>
-          </label>
-
-          <p className="settingsHint">
-            This affects fullscreen collection viewing. Images advance by timer when slideshow is enabled. Videos can
-            either wait for the same timer or move to the next asset as soon as playback finishes. Random mode only
-            affects automatic progression, not your manual left/right navigation.
-          </p>
-
-          <div className="settingsActions">
-            <button
-              className="primaryButton"
-              disabled={!bridgeReady || busy || saving || !isDirty}
-              type="button"
-              onClick={() => void handleSave()}
-            >
-              {saving ? 'Saving...' : 'Save Viewer Settings'}
-            </button>
-            <button
-              className="ghostButton"
-              disabled={saving || !isDirty}
-              type="button"
-              onClick={() => {
-                setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
-                setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
-                setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
-                setFullscreenSlideshowShuffleAllCollections(config.fullscreenSlideshowShuffleAllCollections)
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-      </article>
-    </section>
-  )
-}
-
 function HallSettingsPage() {
   const { galleryState, busy, error, bridgeReady, updateConfig } = useGallery()
   const location = useLocation()
@@ -2495,27 +2445,74 @@ function HallPlaybackSettingsSection({
   onSave: (updates: {
     bannerIntervalSeconds?: number
     bannerVideoMuted?: boolean
+    fullscreenSlideshowEnabled?: boolean
+    fullscreenSlideshowIntervalSeconds?: number
+    fullscreenVideoAdvanceOnEnded?: boolean
+    fullscreenVideoWaitingBehavior?: 'replay' | 'pause'
+    fullscreenSlideshowShuffleAllCollections?: boolean
   }) => Promise<void>
 }) {
   const [bannerIntervalSeconds, setBannerIntervalSeconds] = useState(String(config.bannerIntervalSeconds))
   const [bannerVideoMuted, setBannerVideoMuted] = useState(config.bannerVideoMuted)
+  const [fullscreenSlideshowEnabled, setFullscreenSlideshowEnabled] = useState(config.fullscreenSlideshowEnabled)
+  const [fullscreenSlideshowIntervalSeconds, setFullscreenSlideshowIntervalSeconds] = useState(
+    String(config.fullscreenSlideshowIntervalSeconds),
+  )
+  const [fullscreenVideoAdvanceOnEnded, setFullscreenVideoAdvanceOnEnded] = useState(
+    config.fullscreenVideoAdvanceOnEnded,
+  )
+  const [fullscreenVideoWaitingBehavior, setFullscreenVideoWaitingBehavior] = useState<
+    'replay' | 'pause'
+  >(config.fullscreenVideoWaitingBehavior)
+  const [fullscreenSlideshowShuffleAllCollections, setFullscreenSlideshowShuffleAllCollections] = useState(
+    config.fullscreenSlideshowShuffleAllCollections,
+  )
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setBannerIntervalSeconds(String(config.bannerIntervalSeconds))
     setBannerVideoMuted(config.bannerVideoMuted)
-  }, [config.bannerIntervalSeconds, config.bannerVideoMuted])
+    setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
+    setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
+    setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
+    setFullscreenVideoWaitingBehavior(config.fullscreenVideoWaitingBehavior)
+    setFullscreenSlideshowShuffleAllCollections(config.fullscreenSlideshowShuffleAllCollections)
+  }, [
+    config.bannerIntervalSeconds,
+    config.bannerVideoMuted,
+    config.fullscreenSlideshowEnabled,
+    config.fullscreenSlideshowIntervalSeconds,
+    config.fullscreenVideoAdvanceOnEnded,
+    config.fullscreenVideoWaitingBehavior,
+    config.fullscreenSlideshowShuffleAllCollections,
+  ])
 
-  const normalizedInterval = Number(bannerIntervalSeconds)
+  const normalizedHallInterval = Number(bannerIntervalSeconds)
+  const normalizedFullscreenInterval = Number(fullscreenSlideshowIntervalSeconds)
   const isDirty =
-    normalizedInterval !== config.bannerIntervalSeconds || bannerVideoMuted !== config.bannerVideoMuted
+    normalizedHallInterval !== config.bannerIntervalSeconds ||
+    bannerVideoMuted !== config.bannerVideoMuted ||
+    fullscreenSlideshowEnabled !== config.fullscreenSlideshowEnabled ||
+    normalizedFullscreenInterval !== config.fullscreenSlideshowIntervalSeconds ||
+    fullscreenVideoAdvanceOnEnded !== config.fullscreenVideoAdvanceOnEnded ||
+    fullscreenVideoWaitingBehavior !== config.fullscreenVideoWaitingBehavior ||
+    fullscreenSlideshowShuffleAllCollections !== config.fullscreenSlideshowShuffleAllCollections
 
   async function handleSave() {
     setSaving(true)
     try {
       await onSave({
-        bannerIntervalSeconds: Number.isFinite(normalizedInterval) ? normalizedInterval : config.bannerIntervalSeconds,
+        bannerIntervalSeconds: Number.isFinite(normalizedHallInterval)
+          ? normalizedHallInterval
+          : config.bannerIntervalSeconds,
         bannerVideoMuted,
+        fullscreenSlideshowEnabled,
+        fullscreenSlideshowIntervalSeconds: Number.isFinite(normalizedFullscreenInterval)
+          ? normalizedFullscreenInterval
+          : config.fullscreenSlideshowIntervalSeconds,
+        fullscreenVideoAdvanceOnEnded,
+        fullscreenVideoWaitingBehavior,
+        fullscreenSlideshowShuffleAllCollections,
       })
     } finally {
       setSaving(false)
@@ -2527,7 +2524,7 @@ function HallPlaybackSettingsSection({
       <div className="panelHeader">
         <div>
           <p className="sectionTag">Hall Playback</p>
-          <h2>Rotation And Audio</h2>
+          <h2>Rotation, Fullscreen, And Audio</h2>
         </div>
       </div>
 
@@ -2558,6 +2555,69 @@ function HallPlaybackSettingsSection({
             These settings control the Featured Hall rotation speed and the default audio behavior of banner videos.
           </p>
 
+          <label className="settingsToggle">
+            <input
+              checked={fullscreenSlideshowEnabled}
+              type="checkbox"
+              onChange={(event) => setFullscreenSlideshowEnabled(event.target.checked)}
+            />
+            <span>Enable fullscreen slideshow</span>
+          </label>
+
+          <label className="settingsField">
+            <span>Fullscreen Slideshow Interval Seconds</span>
+            <input
+              className="settingsInput"
+              disabled={!fullscreenSlideshowEnabled}
+              min="2"
+              step="1"
+              type="number"
+              value={fullscreenSlideshowIntervalSeconds}
+              onChange={(event) => setFullscreenSlideshowIntervalSeconds(event.target.value)}
+            />
+          </label>
+
+          <label className="settingsToggle">
+            <input
+              checked={fullscreenVideoAdvanceOnEnded}
+              disabled={!fullscreenSlideshowEnabled}
+              type="checkbox"
+              onChange={(event) => setFullscreenVideoAdvanceOnEnded(event.target.checked)}
+            />
+            <span>Advance to the next fullscreen item when the current video ends</span>
+          </label>
+
+          <label className="settingsField">
+            <span>If a fullscreen video ends before the minimum interval</span>
+            <select
+              className="settingsSelect"
+              disabled={!fullscreenSlideshowEnabled || !fullscreenVideoAdvanceOnEnded}
+              value={fullscreenVideoWaitingBehavior}
+              onChange={(event) =>
+                setFullscreenVideoWaitingBehavior(event.target.value as 'replay' | 'pause')
+              }
+            >
+              <option value="replay">Replay until the minimum interval is reached</option>
+              <option value="pause">Pause on the last frame until the minimum interval is reached</option>
+            </select>
+          </label>
+
+          <label className="settingsToggle">
+            <input
+              checked={fullscreenSlideshowShuffleAllCollections}
+              disabled={!fullscreenSlideshowEnabled}
+              type="checkbox"
+              onChange={(event) => setFullscreenSlideshowShuffleAllCollections(event.target.checked)}
+            />
+            <span>When fullscreen slideshow is enabled, randomly continue with media from all collections</span>
+          </label>
+
+          <p className="settingsHint">
+            Fullscreen videos no longer share control with the Hall rotation timer. The Hall rotation interval only
+            affects non-fullscreen browsing, while the fullscreen interval and video-end behavior above affect the
+            fullscreen viewer.
+          </p>
+
           <div className="settingsActions">
             <button
               className="primaryButton"
@@ -2574,6 +2634,11 @@ function HallPlaybackSettingsSection({
               onClick={() => {
                 setBannerIntervalSeconds(String(config.bannerIntervalSeconds))
                 setBannerVideoMuted(config.bannerVideoMuted)
+                setFullscreenSlideshowEnabled(config.fullscreenSlideshowEnabled)
+                setFullscreenSlideshowIntervalSeconds(String(config.fullscreenSlideshowIntervalSeconds))
+                setFullscreenVideoAdvanceOnEnded(config.fullscreenVideoAdvanceOnEnded)
+                setFullscreenVideoWaitingBehavior(config.fullscreenVideoWaitingBehavior)
+                setFullscreenSlideshowShuffleAllCollections(config.fullscreenSlideshowShuffleAllCollections)
               }}
             >
               Reset
@@ -3694,6 +3759,9 @@ function HallFullscreenOverlay({
   const viewerConfig = galleryState.config
   const slideshowEnabled = slideshowOverride ?? viewerConfig.fullscreenSlideshowEnabled
   const slideshowIntervalSeconds = normalizeIntervalSeconds(viewerConfig.fullscreenSlideshowIntervalSeconds, 6)
+  const videoWaitingBehavior = viewerConfig.fullscreenVideoWaitingBehavior
+  const [videoAdvanceReady, setVideoAdvanceReady] = useState(false)
+  const [videoEndedBeforeAdvance, setVideoEndedBeforeAdvance] = useState(false)
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -3707,7 +3775,7 @@ function HallFullscreenOverlay({
   }, [onClose])
 
   useEffect(() => {
-    if (!viewerConfig.fullscreenSlideshowEnabled) {
+    if (!slideshowEnabled) {
       return
     }
 
@@ -3723,10 +3791,57 @@ function HallFullscreenOverlay({
   }, [
     mediaType,
     onNext,
+    slideshowEnabled,
     src,
-    viewerConfig.fullscreenSlideshowEnabled,
     viewerConfig.fullscreenVideoAdvanceOnEnded,
     slideshowIntervalSeconds,
+  ])
+
+  useEffect(() => {
+    if (!slideshowEnabled || mediaType !== 'video' || !viewerConfig.fullscreenVideoAdvanceOnEnded) {
+      setVideoAdvanceReady(false)
+      setVideoEndedBeforeAdvance(false)
+      return
+    }
+
+    setVideoAdvanceReady(false)
+    setVideoEndedBeforeAdvance(false)
+
+    const timeoutId = window.setTimeout(() => {
+      setVideoAdvanceReady(true)
+    }, slideshowIntervalSeconds * 1000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    mediaType,
+    slideshowEnabled,
+    slideshowIntervalSeconds,
+    src,
+    videoWaitingBehavior,
+    viewerConfig.fullscreenVideoAdvanceOnEnded,
+  ])
+
+  useEffect(() => {
+    if (
+      !slideshowEnabled ||
+      mediaType !== 'video' ||
+      !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+      videoWaitingBehavior !== 'pause' ||
+      !videoAdvanceReady ||
+      !videoEndedBeforeAdvance
+    ) {
+      return
+    }
+
+    onNext()
+  }, [
+    mediaType,
+    onNext,
+    slideshowEnabled,
+    videoAdvanceReady,
+    videoEndedBeforeAdvance,
+    videoWaitingBehavior,
+    viewerConfig.fullscreenVideoAdvanceOnEnded,
   ])
 
   async function handleToggleSlideshow() {
@@ -3791,11 +3906,25 @@ function HallFullscreenOverlay({
               autoPlay
               className="hallFullscreenMedia"
               controls={false}
-              loop={!viewerConfig.fullscreenSlideshowEnabled || !viewerConfig.fullscreenVideoAdvanceOnEnded}
+              key={src}
+              loop={
+                !slideshowEnabled ||
+                !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+                (videoWaitingBehavior === 'replay' && !videoAdvanceReady)
+              }
               muted={isMuted}
               onEnded={() => {
-                if (viewerConfig.fullscreenSlideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded) {
+                if (slideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded && videoAdvanceReady) {
                   onNext()
+                  return
+                }
+
+                if (
+                  slideshowEnabled &&
+                  viewerConfig.fullscreenVideoAdvanceOnEnded &&
+                  videoWaitingBehavior === 'pause'
+                ) {
+                  setVideoEndedBeforeAdvance(true)
                 }
               }}
               playsInline
@@ -4198,9 +4327,12 @@ function FullscreenViewer({
   const isMuted = mutedByAssetPath[asset.path] ?? false
   const slideshowEnabled = slideshowOverride ?? viewerConfig.fullscreenSlideshowEnabled
   const slideshowIntervalSeconds = normalizeIntervalSeconds(viewerConfig.fullscreenSlideshowIntervalSeconds, 6)
+  const videoWaitingBehavior = viewerConfig.fullscreenVideoWaitingBehavior
+  const [videoAdvanceReady, setVideoAdvanceReady] = useState(false)
+  const [videoEndedBeforeAdvance, setVideoEndedBeforeAdvance] = useState(false)
 
   useEffect(() => {
-    if (!viewerConfig.fullscreenSlideshowEnabled) {
+    if (!slideshowEnabled) {
       return
     }
 
@@ -4223,10 +4355,64 @@ function FullscreenViewer({
     asset.type,
     onNext,
     onAutoAdvance,
-    viewerConfig.fullscreenSlideshowEnabled,
+    slideshowEnabled,
     viewerConfig.fullscreenVideoAdvanceOnEnded,
     viewerConfig.fullscreenSlideshowShuffleAllCollections,
     slideshowIntervalSeconds,
+  ])
+
+  useEffect(() => {
+    if (!slideshowEnabled || asset.type !== 'video' || !viewerConfig.fullscreenVideoAdvanceOnEnded) {
+      setVideoAdvanceReady(false)
+      setVideoEndedBeforeAdvance(false)
+      return
+    }
+
+    setVideoAdvanceReady(false)
+    setVideoEndedBeforeAdvance(false)
+
+    const timeoutId = window.setTimeout(() => {
+      setVideoAdvanceReady(true)
+    }, slideshowIntervalSeconds * 1000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    asset.path,
+    asset.type,
+    slideshowEnabled,
+    slideshowIntervalSeconds,
+    videoWaitingBehavior,
+    viewerConfig.fullscreenVideoAdvanceOnEnded,
+  ])
+
+  useEffect(() => {
+    if (
+      !slideshowEnabled ||
+      asset.type !== 'video' ||
+      !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+      videoWaitingBehavior !== 'pause' ||
+      !videoAdvanceReady ||
+      !videoEndedBeforeAdvance
+    ) {
+      return
+    }
+
+    if (viewerConfig.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
+      onAutoAdvance()
+      return
+    }
+
+    onNext()
+  }, [
+    asset.type,
+    onAutoAdvance,
+    onNext,
+    slideshowEnabled,
+    videoAdvanceReady,
+    videoEndedBeforeAdvance,
+    videoWaitingBehavior,
+    viewerConfig.fullscreenSlideshowShuffleAllCollections,
+    viewerConfig.fullscreenVideoAdvanceOnEnded,
   ])
 
   async function handleToggleSlideshow() {
@@ -4313,15 +4499,29 @@ function FullscreenViewer({
                 autoPlay
                 className="viewerVideo"
                 controls
-                loop={!viewerConfig.fullscreenSlideshowEnabled || !viewerConfig.fullscreenVideoAdvanceOnEnded}
+                key={asset.path}
+                loop={
+                  !slideshowEnabled ||
+                  !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+                  (videoWaitingBehavior === 'replay' && !videoAdvanceReady)
+                }
                 onEnded={() => {
-                  if (viewerConfig.fullscreenSlideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded) {
+                  if (slideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded && videoAdvanceReady) {
                     if (viewerConfig.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
                       onAutoAdvance()
                       return
                     }
 
                     onNext()
+                    return
+                  }
+
+                  if (
+                    slideshowEnabled &&
+                    viewerConfig.fullscreenVideoAdvanceOnEnded &&
+                    videoWaitingBehavior === 'pause'
+                  ) {
+                    setVideoEndedBeforeAdvance(true)
                   }
                 }}
                 muted={isMuted}

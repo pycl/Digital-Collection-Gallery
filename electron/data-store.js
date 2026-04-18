@@ -14,6 +14,7 @@ const defaultConfig = {
   fullscreenSlideshowEnabled: false,
   fullscreenSlideshowIntervalSeconds: 6,
   fullscreenVideoAdvanceOnEnded: true,
+  fullscreenVideoWaitingBehavior: 'replay',
   fullscreenSlideshowShuffleAllCollections: false,
   collectionsSort: 'id_asc',
 }
@@ -73,6 +74,10 @@ function normalizeIntervalSeconds(value, fallback) {
   return Math.max(2, Math.round(value))
 }
 
+function normalizeFullscreenVideoWaitingBehavior(value) {
+  return value === 'pause' ? 'pause' : defaultConfig.fullscreenVideoWaitingBehavior
+}
+
 async function ensureDataDir() {
   await fs.mkdir(getDataDir(), { recursive: true })
 }
@@ -119,6 +124,7 @@ export async function readConfig() {
     ...saved,
     uiScale: normalizeUiScale(saved.uiScale),
     bannerIntervalSeconds: normalizeIntervalSeconds(saved.bannerIntervalSeconds, defaultConfig.bannerIntervalSeconds),
+    fullscreenVideoWaitingBehavior: normalizeFullscreenVideoWaitingBehavior(saved.fullscreenVideoWaitingBehavior),
     fullscreenSlideshowIntervalSeconds: normalizeIntervalSeconds(
       saved.fullscreenSlideshowIntervalSeconds,
       defaultConfig.fullscreenSlideshowIntervalSeconds,
@@ -374,6 +380,12 @@ export async function updateAppConfig(updates) {
 
   if (typeof updates.fullscreenVideoAdvanceOnEnded === 'boolean') {
     nextConfig.fullscreenVideoAdvanceOnEnded = updates.fullscreenVideoAdvanceOnEnded
+  }
+
+  if (typeof updates.fullscreenVideoWaitingBehavior === 'string') {
+    nextConfig.fullscreenVideoWaitingBehavior = normalizeFullscreenVideoWaitingBehavior(
+      updates.fullscreenVideoWaitingBehavior,
+    )
   }
 
   if (typeof updates.fullscreenSlideshowShuffleAllCollections === 'boolean') {
