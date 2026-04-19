@@ -8,13 +8,14 @@ const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.m4v'])
 const defaultConfig = {
   importPaths: [],
   featuredEntries: [],
+  language: 'en',
   uiScale: 1,
   bannerIntervalSeconds: 8,
   bannerVideoMuted: true,
   fullscreenSlideshowEnabled: false,
   fullscreenSlideshowIntervalSeconds: 6,
   fullscreenVideoAdvanceOnEnded: true,
-  fullscreenVideoWaitingBehavior: 'replay',
+  fullscreenVideoWaitingBehavior: 'none',
   fullscreenSlideshowShuffleAllCollections: false,
   collectionsSort: 'id_asc',
 }
@@ -75,7 +76,13 @@ function normalizeIntervalSeconds(value, fallback) {
 }
 
 function normalizeFullscreenVideoWaitingBehavior(value) {
-  return value === 'pause' ? 'pause' : defaultConfig.fullscreenVideoWaitingBehavior
+  return value === 'complete' || value === 'replay' || value === 'pause'
+    ? value
+    : defaultConfig.fullscreenVideoWaitingBehavior
+}
+
+function normalizeLanguage(value) {
+  return value === 'zh' ? 'zh' : defaultConfig.language
 }
 
 async function ensureDataDir() {
@@ -122,6 +129,7 @@ export async function readConfig() {
   return {
     ...defaultConfig,
     ...saved,
+    language: normalizeLanguage(saved.language),
     uiScale: normalizeUiScale(saved.uiScale),
     bannerIntervalSeconds: normalizeIntervalSeconds(saved.bannerIntervalSeconds, defaultConfig.bannerIntervalSeconds),
     fullscreenVideoWaitingBehavior: normalizeFullscreenVideoWaitingBehavior(saved.fullscreenVideoWaitingBehavior),
@@ -358,6 +366,10 @@ export async function updateAppConfig(updates) {
 
   if (typeof updates.uiScale === 'number' && Number.isFinite(updates.uiScale)) {
     nextConfig.uiScale = normalizeUiScale(updates.uiScale)
+  }
+
+  if (typeof updates.language === 'string') {
+    nextConfig.language = normalizeLanguage(updates.language)
   }
 
   if (typeof updates.bannerVideoMuted === 'boolean') {

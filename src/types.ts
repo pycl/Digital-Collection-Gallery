@@ -31,13 +31,14 @@ export type CollectionRecord = {
 export type AppConfig = {
   importPaths: string[]
   featuredEntries: FeaturedEntry[]
+  language: 'en' | 'zh'
   uiScale: number
   bannerIntervalSeconds: number
   bannerVideoMuted: boolean
   fullscreenSlideshowEnabled: boolean
   fullscreenSlideshowIntervalSeconds: number
   fullscreenVideoAdvanceOnEnded: boolean
-  fullscreenVideoWaitingBehavior: 'replay' | 'pause'
+  fullscreenVideoWaitingBehavior: 'none' | 'complete' | 'replay' | 'pause'
   fullscreenSlideshowShuffleAllCollections: boolean
   collectionsSort: 'id_asc' | 'id_desc'
 }

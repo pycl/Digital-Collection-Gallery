@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, screen, shell } from 'electron'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -16,6 +16,17 @@ const __dirname = path.dirname(__filename)
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 const distIndexPath = path.join(__dirname, '..', 'dist', 'index.html')
 const galleryProtocol = 'gallery-file'
+const activeWindowDrags = new Map()
+
+function stopWindowDrag(windowId) {
+  const activeDrag = activeWindowDrags.get(windowId)
+  if (!activeDrag) {
+    return
+  }
+
+  clearInterval(activeDrag.intervalId)
+  activeWindowDrags.delete(windowId)
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -111,6 +122,110 @@ app.whenReady().then(() => {
   ipcMain.handle('app:close-window', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.close()
   })
+  ipcMain.handle('app:get-window-bounds', (event) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender)
+    if (!browserWindow) {
+      return null
+    }
+
+    const bounds = browserWindow.getBounds()
+    return {
+      ...bounds,
+      isMaximized: browserWindow.isMaximized(),
+    }
+  })
+  ipcMain.handle('app:start-window-drag', (event) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender)
+    if (!browserWindow || browserWindow.isDestroyed() || browserWindow.isMaximized()) {
+      return false
+    }
+
+    const windowId = browserWindow.id
+    stopWindowDrag(windowId)
+
+    const startBounds = browserWindow.getBounds()
+    const startCursorPoint = screen.getCursorScreenPoint()
+    const intervalId = setInterval(() => {
+      if (browserWindow.isDestroyed() || browserWindow.isMaximized()) {
+        stopWindowDrag(windowId)
+        return
+      }
+
+      const cursorPoint = screen.getCursorScreenPoint()
+      const targetX = startBounds.x + (cursorPoint.x - startCursorPoint.x)
+      const targetY = startBounds.y + (cursorPoint.y - startCursorPoint.y)
+      const nextBounds = browserWindow.getBounds()
+      const workArea = screen.getDisplayNearestPoint(cursorPoint).workArea
+      const visibleMarginX = Math.min(140, Math.max(80, Math.round(nextBounds.width * 0.2)))
+      const minVisibleHeight = 72
+      const nextX = Math.round(
+        Math.min(
+          workArea.x + workArea.width - visibleMarginX,
+          Math.max(workArea.x - nextBounds.width + visibleMarginX, targetX),
+        ),
+      )
+      const nextY = Math.round(
+        Math.min(
+          workArea.y + workArea.height - minVisibleHeight,
+          Math.max(workArea.y + 12, targetY),
+        ),
+      )
+
+      browserWindow.setBounds(
+        {
+          x: nextX,
+          y: nextY,
+          width: nextBounds.width,
+          height: nextBounds.height,
+        },
+        false,
+      )
+    }, 8)
+
+    activeWindowDrags.set(windowId, { intervalId })
+    return true
+  })
+  ipcMain.on('app:stop-window-drag', (event) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender)
+    if (!browserWindow) {
+      return
+    }
+
+    stopWindowDrag(browserWindow.id)
+  })
+  ipcMain.on('app:set-window-position', (event, x, y) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender)
+    if (!browserWindow || browserWindow.isDestroyed() || browserWindow.isMaximized()) {
+      return
+    }
+
+    const bounds = browserWindow.getBounds()
+    const workArea = screen.getDisplayMatching(bounds).workArea
+    const visibleMarginX = Math.min(140, Math.max(80, Math.round(bounds.width * 0.2)))
+    const minVisibleHeight = 72
+    const nextX = Math.round(
+      Math.min(
+        workArea.x + workArea.width - visibleMarginX,
+        Math.max(workArea.x - bounds.width + visibleMarginX, x),
+      ),
+    )
+    const nextY = Math.round(
+      Math.min(
+        workArea.y + workArea.height - minVisibleHeight,
+        Math.max(workArea.y + 12, y),
+      ),
+    )
+
+    browserWindow.setBounds(
+      {
+        x: nextX,
+        y: nextY,
+        width: bounds.width,
+        height: bounds.height,
+      },
+      false,
+    )
+  })
   ipcMain.handle('gallery:get-state', async () => getGalleryState())
   ipcMain.handle('gallery:scan', async () => {
     const config = await readConfig()
@@ -189,6 +304,10 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  activeWindowDrags.forEach((activeDrag) => {
+    clearInterval(activeDrag.intervalId)
+  })
+  activeWindowDrags.clear()
   if (process.platform !== 'darwin') {
     app.quit()
   }

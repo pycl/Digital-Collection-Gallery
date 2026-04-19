@@ -8,6 +8,16 @@ declare global {
       minimizeWindow: () => Promise<void>
       toggleMaximizeWindow: () => Promise<void>
       closeWindow: () => Promise<void>
+      getWindowBounds: () => Promise<{
+        x: number
+        y: number
+        width: number
+        height: number
+        isMaximized: boolean
+      } | null>
+      startWindowDrag: () => Promise<boolean>
+      stopWindowDrag: () => void
+      setWindowPosition: (x: number, y: number) => void
       getState: () => Promise<GalleryState>
       scanCollections: () => Promise<GalleryState>
       addImportPath: () => Promise<GalleryState>
@@ -21,13 +31,14 @@ declare global {
           subtitle: string
           enabled: boolean
         }>
+        language?: 'en' | 'zh'
         uiScale?: number
         bannerIntervalSeconds?: number
         bannerVideoMuted?: boolean
         fullscreenSlideshowEnabled?: boolean
         fullscreenSlideshowIntervalSeconds?: number
         fullscreenVideoAdvanceOnEnded?: boolean
-        fullscreenVideoWaitingBehavior?: 'replay' | 'pause'
+        fullscreenVideoWaitingBehavior?: 'none' | 'complete' | 'replay' | 'pause'
         fullscreenSlideshowShuffleAllCollections?: boolean
       }) => Promise<GalleryState>
       updateCollection: (

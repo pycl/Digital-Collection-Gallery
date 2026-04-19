@@ -8,7 +8,9 @@
   useState,
   type CSSProperties,
   type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
   type ReactNode,
 } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -19,25 +21,232 @@ const emptyState: GalleryState = {
   config: {
     importPaths: [],
     featuredEntries: [],
+    language: 'en',
     uiScale: 1,
     bannerIntervalSeconds: 8,
     bannerVideoMuted: true,
     fullscreenSlideshowEnabled: false,
     fullscreenSlideshowIntervalSeconds: 6,
     fullscreenVideoAdvanceOnEnded: true,
-    fullscreenVideoWaitingBehavior: 'replay',
+    fullscreenVideoWaitingBehavior: 'none',
     fullscreenSlideshowShuffleAllCollections: false,
     collectionsSort: 'id_asc',
   },
   collections: [],
 }
 
+type AppLanguage = GalleryState['config']['language']
+
+const messages = {
+  en: {
+    appName: 'Digital Collection Gallery',
+    routeDashboard: 'Dashboard',
+    routeHall: 'Hall',
+    routeHallSettings: 'Hall Settings',
+    routeSettings: 'Settings',
+    routeCollection: 'Collection',
+    routeGallery: 'Gallery',
+    back: 'Back',
+    dashboard: 'Dashboard',
+    settings: 'Settings',
+    openHall: 'Open Hall',
+    openHallSettings: 'Open Hall Settings',
+    previewHall: 'Preview Hall',
+    editEntries: 'Edit Entries',
+    importFolder: 'Import Folder',
+    rescan: 'Rescan',
+    display: 'Display',
+    interfaceScale: 'Interface Scale',
+    scalePercentage: 'Scale Percentage',
+    displayHint:
+      'Adjust the overall application size. `100%` is the default size. Smaller values make the whole interface denser, including the dashboard, hall, and collection pages.',
+    language: 'Language',
+    english: 'English',
+    chinese: 'Chinese',
+    saveDisplaySettings: 'Save Display Settings',
+    saveHallPlayback: 'Save Hall Playback',
+    reset: 'Reset',
+    settingsEyebrow: 'Settings',
+    collectionSettingsTitle: 'Collection Settings',
+    collectionSettingsSubtitle:
+      'Edit display names, manual covers, and featured media for each imported collection.',
+    hallSettingsCardTitle: 'Featured hall cards are managed separately now',
+    hallSettingsCardSubtitle:
+      'Open the dedicated Hall Settings page to edit featured entries, hall rotation, fullscreen playback behavior, and preview each card in one place.',
+    importedCollections: 'Imported Collections',
+    loadingSettings: 'Loading settings...',
+    noCollectionsImported: 'No collections imported yet.',
+    noCollectionsImportedHint: 'Return to the home page and import at least one numeric collection folder first.',
+    hallSettingsEyebrow: 'Hall Settings',
+    hallSettingsTitle: 'Featured Hall Builder',
+    hallSettingsSubtitle:
+      'Configure the curated cards shown in the exhibition hall. Each entry can target any collection and any media item, with its own title, subtitle, and preview.',
+    hallPlaybackTag: 'Hall Playback',
+    hallPlaybackTitle: 'Rotation, Fullscreen, And Audio',
+    rotationIntervalSeconds: 'Rotation Interval Seconds',
+    muteFeaturedBannerVideos: 'Mute featured banner videos',
+    hallPlaybackHint:
+      'These settings control the Featured Hall rotation speed and the default audio behavior of banner videos.',
+    enableFullscreenSlideshow: 'Enable fullscreen slideshow',
+    fullscreenSlideshowIntervalSeconds: 'Fullscreen Slideshow Interval Seconds',
+    advanceOnVideoEnd: 'Advance to the next fullscreen item when the current video ends',
+    fullscreenWaitingBehavior: 'If a fullscreen video and the minimum interval do not line up',
+    waitingBehaviorNone: 'None: switch on the timer even if the video is still playing',
+    waitingBehaviorComplete: 'Always finish the current video, then switch immediately',
+    waitingBehaviorReplay: 'Replay until the minimum interval is reached',
+    waitingBehaviorPause: 'Pause on the last frame until the minimum interval is reached',
+    fullscreenShuffleAllCollections:
+      'When fullscreen slideshow is enabled, randomly continue with media from all collections',
+    fullscreenHint:
+      'Fullscreen videos no longer share control with the Hall rotation timer. The Hall rotation interval only affects non-fullscreen browsing, while the fullscreen interval and video-end behavior above affect the fullscreen viewer.',
+    expandMedia: 'Expand Media',
+    hallControls: 'Hall Controls',
+    unmuteFeaturedVideos: 'Unmute featured videos',
+    muteFeaturedVideos: 'Mute featured videos',
+    pauseHallRotation: 'Pause hall rotation',
+    resumeHallRotation: 'Resume hall rotation',
+    featuredHallActive: 'Featured hall active',
+    switchToFeaturedHall: 'Switch to featured hall',
+    reshuffleRandomMp4: 'Reshuffle random MP4',
+    randomMp4FromAllCollections: 'Random MP4 from all collections',
+    reshuffleRandomMedia: 'Reshuffle random media',
+    randomMediaFromAllCollections: 'Random media from all collections',
+    hallSettings: 'Hall Settings',
+    openCollection: 'Open Collection',
+    noHallEntriesYet: 'No hall entries yet.',
+    noHallEntriesHint: 'Go to Hall Settings and start composing featured cards.',
+    featuredRing: 'Featured Ring',
+    rotationOn: 'Rotation On',
+    rotationOff: 'Rotation Off',
+    hallModeFeatured: 'Featured Hall',
+    hallModeRandomMp4: 'Random MP4',
+    hallModeRandomMixed: 'Random Mixed',
+    currentCard: 'Current Card',
+    mediaImage: 'Image',
+    mediaVideo: 'Video',
+    noPreview: 'No preview',
+    noFeaturedCardsConfigured: 'No featured cards configured yet.',
+    noRandomMp4Assets: 'No MP4 assets available for random playback.',
+    noRandomAssets: 'No assets available for random playback.',
+    hallEmptyFeaturedHint: 'Open Hall Settings and add at least one featured entry to populate the hall.',
+    hallEmptyRandomHint: 'Import more collection folders or switch back to the featured hall mode.',
+    homeEyebrow: 'Dashboard',
+    homeTitle: 'Digital Collection Gallery',
+    homeSubtitle:
+      'Manage imported collections here, then open the dedicated hall page for immersive browsing.',
+    featuredHallEyebrow: 'Featured Hall',
+    featuredHallTitle: 'Curated Display',
+    featuredHallSubtitle:
+      'This page is now the dedicated exhibition layer. Drag, scroll, or use the arrow keys to rotate the featured card ring.',
+  },
+  zh: {
+    appName: '数字藏品展馆',
+    routeDashboard: '主页',
+    routeHall: '展馆',
+    routeHallSettings: '展馆设置',
+    routeSettings: '设置',
+    routeCollection: '收藏集',
+    routeGallery: '画廊',
+    back: '返回',
+    dashboard: '主页',
+    settings: '设置',
+    openHall: '打开展馆',
+    openHallSettings: '打开展馆设置',
+    previewHall: '预览展馆',
+    editEntries: '编辑条目',
+    importFolder: '导入文件夹',
+    rescan: '重新扫描',
+    display: '显示',
+    interfaceScale: '界面缩放',
+    scalePercentage: '缩放比例',
+    displayHint: '调整整体界面尺寸。`100%` 为默认大小。更小的数值会让主页、展馆和收藏集页面整体更紧凑。',
+    language: '语言',
+    english: '英文',
+    chinese: '中文',
+    saveDisplaySettings: '保存显示设置',
+    saveHallPlayback: '保存展馆播放设置',
+    reset: '重置',
+    settingsEyebrow: '设置',
+    collectionSettingsTitle: '收藏集设置',
+    collectionSettingsSubtitle: '编辑每个已导入收藏集的显示名称、手动封面和精选媒体。',
+    hallSettingsCardTitle: '展馆卡片已独立管理',
+    hallSettingsCardSubtitle: '打开专门的展馆设置页面，在同一处编辑精选条目、展馆轮播、全屏播放行为并预览每张卡片。',
+    importedCollections: '已导入收藏集',
+    loadingSettings: '正在加载设置...',
+    noCollectionsImported: '还没有导入任何收藏集。',
+    noCollectionsImportedHint: '请先返回主页并导入至少一个纯数字命名的收藏集文件夹。',
+    hallSettingsEyebrow: '展馆设置',
+    hallSettingsTitle: '精选展馆编辑器',
+    hallSettingsSubtitle: '配置展馆中展示的精选卡片。每个条目都可以指向任意收藏集和媒体，并拥有独立标题、副标题和预览。',
+    hallPlaybackTag: '展馆播放',
+    hallPlaybackTitle: '轮播、全屏与音频',
+    rotationIntervalSeconds: '轮播间隔秒数',
+    muteFeaturedBannerVideos: '默认静音展馆视频',
+    hallPlaybackHint: '这些设置控制展馆非全屏轮播速度，以及展馆视频的默认音频行为。',
+    enableFullscreenSlideshow: '启用全屏轮播',
+    fullscreenSlideshowIntervalSeconds: '全屏轮播最短停留秒数',
+    advanceOnVideoEnd: '当前视频播放结束时切换到下一个全屏项目',
+    fullscreenWaitingBehavior: '当全屏视频与最短停留时间不一致时',
+    waitingBehaviorNone: '无：到时间就切换，即使视频还没播完',
+    waitingBehaviorComplete: '始终先播放完整个当前视频，结束后立刻切换',
+    waitingBehaviorReplay: '重播直到达到最短停留时间',
+    waitingBehaviorPause: '停在最后一帧直到达到最短停留时间',
+    fullscreenShuffleAllCollections: '启用全屏轮播时，随机从所有收藏集中继续播放媒体',
+    fullscreenHint: '全屏视频现在不再和展馆非全屏轮播共用同一套控制。展馆轮播间隔只影响非全屏浏览；上面的全屏间隔和视频结束行为只影响全屏查看器。',
+    expandMedia: '放大媒体',
+    hallControls: '展馆控制',
+    unmuteFeaturedVideos: '取消静音展馆视频',
+    muteFeaturedVideos: '静音展馆视频',
+    pauseHallRotation: '暂停展馆轮播',
+    resumeHallRotation: '恢复展馆轮播',
+    featuredHallActive: '当前为精选展馆',
+    switchToFeaturedHall: '切换到精选展馆',
+    reshuffleRandomMp4: '重新随机 MP4',
+    randomMp4FromAllCollections: '从所有收藏集中随机 MP4',
+    reshuffleRandomMedia: '重新随机媒体',
+    randomMediaFromAllCollections: '从所有收藏集中随机媒体',
+    hallSettings: '展馆设置',
+    openCollection: '打开收藏集',
+    noHallEntriesYet: '还没有展馆条目。',
+    noHallEntriesHint: '前往展馆设置开始配置精选卡片。',
+    featuredRing: '精选展馆',
+    rotationOn: '轮播中',
+    rotationOff: '已暂停轮播',
+    hallModeFeatured: '精选展馆',
+    hallModeRandomMp4: '随机 MP4',
+    hallModeRandomMixed: '随机混合',
+    currentCard: '当前卡片',
+    mediaImage: '图片',
+    mediaVideo: '视频',
+    noPreview: '无预览',
+    noFeaturedCardsConfigured: '还没有配置任何精选卡片。',
+    noRandomMp4Assets: '当前没有可用于随机播放的 MP4 资源。',
+    noRandomAssets: '当前没有可用于随机播放的资源。',
+    hallEmptyFeaturedHint: '打开展馆设置并至少添加一个精选条目，展馆才会显示内容。',
+    hallEmptyRandomHint: '请导入更多收藏集，或切换回精选展馆模式。',
+    homeEyebrow: '主页',
+    homeTitle: '数字藏品展馆',
+    homeSubtitle: '在这里管理已导入的收藏集，然后进入专门的展馆页面进行沉浸式浏览。',
+    featuredHallEyebrow: '精选展馆',
+    featuredHallTitle: '策展展示',
+    featuredHallSubtitle: '这里是专门的展览视图。你可以拖拽、滚动或使用方向键旋转精选卡片环。',
+  },
+} as const
+
+type TranslationKey = keyof typeof messages.en
+
+function createTranslator(language: AppLanguage) {
+  return (key: TranslationKey) => messages[language][key] ?? messages.en[key]
+}
+
 type GalleryContextValue = {
   galleryState: GalleryState
+  language: AppLanguage
   loading: boolean
   busy: boolean
   error: string | null
   bridgeReady: boolean
+  t: (key: TranslationKey) => string
   refreshCollections: () => Promise<void>
   importFolder: () => Promise<void>
   removeImportPath: (importPath: string) => Promise<void>
@@ -49,7 +258,7 @@ type GalleryContextValue = {
     fullscreenSlideshowEnabled?: boolean
     fullscreenSlideshowIntervalSeconds?: number
     fullscreenVideoAdvanceOnEnded?: boolean
-    fullscreenVideoWaitingBehavior?: 'replay' | 'pause'
+    fullscreenVideoWaitingBehavior?: 'none' | 'complete' | 'replay' | 'pause'
     fullscreenSlideshowShuffleAllCollections?: boolean
   }) => Promise<void>
   updateCollection: (
@@ -101,20 +310,21 @@ function AppFrame() {
 }
 
 function WindowChrome() {
+  const { t } = useGallery()
   const location = useLocation()
   const immersiveChrome = location.pathname === '/hall' || location.pathname.startsWith('/collections/')
   const routeLabel =
     location.pathname === '/'
-      ? 'Dashboard'
+      ? t('routeDashboard')
       : location.pathname === '/hall'
-        ? 'Hall'
+        ? t('routeHall')
         : location.pathname === '/hall-settings'
-          ? 'Hall Settings'
+          ? t('routeHallSettings')
           : location.pathname === '/settings'
-            ? 'Settings'
+            ? t('routeSettings')
             : location.pathname.startsWith('/collections/')
-              ? 'Collection'
-              : 'Gallery'
+              ? t('routeCollection')
+              : t('routeGallery')
 
   return (
     <div className={`windowChrome ${immersiveChrome ? 'windowChromeImmersive' : ''}`}>
@@ -122,10 +332,12 @@ function WindowChrome() {
         <div className="windowChromeBrand">
           <span aria-hidden="true" className="windowChromeMark" />
           <div className="windowChromeText">
-            <strong>Digital Collection Gallery</strong>
+            <strong>{t('appName')}</strong>
             <span>{routeLabel}</span>
           </div>
         </div>
+
+        {immersiveChrome ? <div aria-hidden="true" className="windowChromeDragArea" /> : null}
 
         <div className="windowChromeControls">
           <button
@@ -164,6 +376,8 @@ function GalleryProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bridgeReady = typeof window.galleryApp !== 'undefined'
+  const language = galleryState.config.language
+  const t = useMemo(() => createTranslator(language), [language])
 
   async function runUpdate(loader: () => Promise<GalleryState>, pending = false) {
     try {
@@ -181,6 +395,10 @@ function GalleryProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
+  }, [language])
+
+  useEffect(() => {
     if (!bridgeReady) {
       setError('Electron preload bridge is unavailable. Restart the app after the latest code changes.')
       setLoading(false)
@@ -192,10 +410,12 @@ function GalleryProvider({ children }: { children: ReactNode }) {
 
   const value: GalleryContextValue = {
     galleryState,
+    language,
     loading,
     busy,
     error,
     bridgeReady,
+    t,
     refreshCollections: () => runUpdate(() => window.galleryApp.scanCollections(), true),
     importFolder: () => runUpdate(() => window.galleryApp.addImportPath(), true),
     removeImportPath: (importPath) =>
@@ -452,6 +672,431 @@ function getFeaturedEntryDisplay(entry: ResolvedFeaturedEntry | null) {
   }
 }
 
+function useResilientVideoPlayback(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  {
+    enabled,
+    sourceKey,
+    paused = false,
+    recoverOnUnexpectedPause = false,
+  }: {
+    enabled: boolean
+    sourceKey: string
+    paused?: boolean
+    recoverOnUnexpectedPause?: boolean
+  },
+) {
+  const pausedRef = useRef(paused)
+
+  useEffect(() => {
+    pausedRef.current = paused
+  }, [paused])
+
+  useEffect(() => {
+    if (!enabled || !videoRef.current) {
+      return
+    }
+
+    const videoElement = videoRef.current
+    const retryTimeoutIds: number[] = []
+    let disposed = false
+
+    const scheduleTryPlay = (delay: number) => {
+      const timeoutId = window.setTimeout(() => {
+        const timeoutIndex = retryTimeoutIds.indexOf(timeoutId)
+        if (timeoutIndex >= 0) {
+          retryTimeoutIds.splice(timeoutIndex, 1)
+        }
+        tryPlay()
+      }, delay)
+      retryTimeoutIds.push(timeoutId)
+    }
+
+    const tryPlay = () => {
+      if (disposed) {
+        return
+      }
+
+      if (pausedRef.current) {
+        videoElement.pause()
+        return
+      }
+
+      const playPromise = videoElement.play()
+      if (playPromise) {
+        void playPromise.catch(() => {})
+      }
+    }
+
+    const handleCanPlay = () => {
+      tryPlay()
+    }
+
+    const handleUnexpectedPause = () => {
+      if (!recoverOnUnexpectedPause || disposed || pausedRef.current) {
+        return
+      }
+
+      if (document.visibilityState === 'hidden' || videoElement.ended || videoElement.seeking) {
+        return
+      }
+
+      scheduleTryPlay(90)
+      scheduleTryPlay(240)
+    }
+
+    const handleWindowFocus = () => {
+      if (!recoverOnUnexpectedPause) {
+        return
+      }
+
+      scheduleTryPlay(0)
+      scheduleTryPlay(120)
+    }
+
+    videoElement.pause()
+    videoElement.load()
+    videoElement.addEventListener('loadeddata', handleCanPlay)
+    videoElement.addEventListener('canplay', handleCanPlay)
+    if (recoverOnUnexpectedPause) {
+      videoElement.addEventListener('pause', handleUnexpectedPause)
+      videoElement.addEventListener('stalled', handleCanPlay)
+      videoElement.addEventListener('suspend', handleCanPlay)
+      videoElement.addEventListener('waiting', handleCanPlay)
+      window.addEventListener('focus', handleWindowFocus)
+      document.addEventListener('visibilitychange', handleWindowFocus)
+    }
+
+    scheduleTryPlay(0)
+    scheduleTryPlay(120)
+    scheduleTryPlay(360)
+
+    return () => {
+      disposed = true
+      videoElement.removeEventListener('loadeddata', handleCanPlay)
+      videoElement.removeEventListener('canplay', handleCanPlay)
+      if (recoverOnUnexpectedPause) {
+        videoElement.removeEventListener('pause', handleUnexpectedPause)
+        videoElement.removeEventListener('stalled', handleCanPlay)
+        videoElement.removeEventListener('suspend', handleCanPlay)
+        videoElement.removeEventListener('waiting', handleCanPlay)
+        window.removeEventListener('focus', handleWindowFocus)
+        document.removeEventListener('visibilitychange', handleWindowFocus)
+      }
+      retryTimeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
+    }
+  }, [enabled, recoverOnUnexpectedPause, sourceKey, videoRef])
+
+  useEffect(() => {
+    if (!enabled || !videoRef.current) {
+      return
+    }
+
+    const videoElement = videoRef.current
+    if (paused) {
+      videoElement.pause()
+      return
+    }
+
+    const playPromise = videoElement.play()
+    if (playPromise) {
+      void playPromise.catch(() => {})
+    }
+  }, [enabled, paused, sourceKey, videoRef])
+}
+
+function useHorizontalDragScroll() {
+  const railRef = useRef<HTMLDivElement | null>(null)
+  const suppressClickRef = useRef(false)
+  const dragStateRef = useRef<{
+    pointerId: number | null
+    captured: boolean
+    startX: number
+    startScrollLeft: number
+    pendingScrollLeft: number
+    moved: boolean
+    scrollRafId: number | null
+    inertiaRafId: number | null
+    velocity: number
+    lastClientX: number
+    lastTimestamp: number
+  }>({
+    pointerId: null,
+    captured: false,
+    startX: 0,
+    startScrollLeft: 0,
+    pendingScrollLeft: 0,
+    moved: false,
+    scrollRafId: null,
+    inertiaRafId: null,
+    velocity: 0,
+    lastClientX: 0,
+    lastTimestamp: 0,
+  })
+  const [dragging, setDragging] = useState(false)
+
+  const clampScrollLeft = useCallback((rail: HTMLDivElement, nextScrollLeft: number) => {
+    const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth)
+    return clampNumber(nextScrollLeft, 0, maxScrollLeft)
+  }, [])
+
+  const cancelScrollFrame = useCallback(() => {
+    const { scrollRafId } = dragStateRef.current
+    if (scrollRafId !== null) {
+      window.cancelAnimationFrame(scrollRafId)
+      dragStateRef.current.scrollRafId = null
+    }
+  }, [])
+
+  const cancelInertiaFrame = useCallback(() => {
+    const { inertiaRafId } = dragStateRef.current
+    if (inertiaRafId !== null) {
+      window.cancelAnimationFrame(inertiaRafId)
+      dragStateRef.current.inertiaRafId = null
+    }
+  }, [])
+
+  const snapToNearestThumb = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const rail = railRef.current
+    if (!rail) {
+      return
+    }
+
+    const thumbs = Array.from(rail.children) as HTMLElement[]
+    if (thumbs.length === 0) {
+      return
+    }
+
+    const railCenter = rail.scrollLeft + rail.clientWidth / 2
+    let bestThumb: HTMLElement | null = null
+    let bestDistance = Number.POSITIVE_INFINITY
+
+    thumbs.forEach((thumb) => {
+      const thumbCenter = thumb.offsetLeft + thumb.offsetWidth / 2
+      const distance = Math.abs(thumbCenter - railCenter)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestThumb = thumb
+      }
+    })
+
+    if (!bestThumb) {
+      return
+    }
+
+    const targetThumb = bestThumb as HTMLElement
+    const targetScrollLeft = clampScrollLeft(
+      rail,
+      targetThumb.offsetLeft + targetThumb.offsetWidth / 2 - rail.clientWidth / 2,
+    )
+    rail.scrollTo({
+      left: targetScrollLeft,
+      behavior,
+    })
+  }, [clampScrollLeft])
+
+  const startInertia = useCallback(() => {
+    const rail = railRef.current
+    if (!rail) {
+      snapToNearestThumb()
+      return
+    }
+
+    cancelInertiaFrame()
+
+    let velocity = dragStateRef.current.velocity
+    let lastFrameTime = performance.now()
+
+    const step = (timestamp: number) => {
+      const currentRail = railRef.current
+      if (!currentRail) {
+        dragStateRef.current.inertiaRafId = null
+        return
+      }
+
+      const elapsed = Math.max(1, timestamp - lastFrameTime)
+      lastFrameTime = timestamp
+
+      if (Math.abs(velocity) < 0.012) {
+        dragStateRef.current.inertiaRafId = null
+        dragStateRef.current.velocity = 0
+        snapToNearestThumb()
+        return
+      }
+
+      const nextScrollLeft = clampScrollLeft(currentRail, currentRail.scrollLeft + velocity * elapsed)
+      currentRail.scrollLeft = nextScrollLeft
+
+      const atEdge =
+        nextScrollLeft <= 0.5 ||
+        nextScrollLeft >= Math.max(0, currentRail.scrollWidth - currentRail.clientWidth) - 0.5
+      if (atEdge) {
+        velocity = 0
+        dragStateRef.current.inertiaRafId = null
+        dragStateRef.current.velocity = 0
+        snapToNearestThumb()
+        return
+      }
+
+      velocity *= Math.pow(0.965, elapsed / 16.67)
+      dragStateRef.current.velocity = velocity
+      dragStateRef.current.inertiaRafId = window.requestAnimationFrame(step)
+    }
+
+    dragStateRef.current.inertiaRafId = window.requestAnimationFrame(step)
+  }, [cancelInertiaFrame, clampScrollLeft, snapToNearestThumb])
+
+  const finishDrag = useCallback((event?: ReactPointerEvent<HTMLDivElement>) => {
+    const rail = railRef.current
+    const { pointerId, moved, captured } = dragStateRef.current
+
+    if (
+      rail &&
+      event &&
+      pointerId !== null &&
+      captured &&
+      event.pointerId === pointerId &&
+      rail.hasPointerCapture(event.pointerId)
+    ) {
+      rail.releasePointerCapture(event.pointerId)
+    }
+
+    cancelScrollFrame()
+    dragStateRef.current.pointerId = null
+    dragStateRef.current.captured = false
+    setDragging(false)
+
+    if (moved) {
+      if (Math.abs(dragStateRef.current.velocity) > 0.01) {
+        startInertia()
+      } else {
+        dragStateRef.current.velocity = 0
+        snapToNearestThumb()
+      }
+
+      window.setTimeout(() => {
+        suppressClickRef.current = false
+      }, 0)
+    } else {
+      dragStateRef.current.velocity = 0
+    }
+    dragStateRef.current.moved = false
+  }, [cancelScrollFrame, snapToNearestThumb, startInertia])
+
+  useEffect(
+    () => () => {
+      cancelScrollFrame()
+      cancelInertiaFrame()
+    },
+    [cancelInertiaFrame, cancelScrollFrame],
+  )
+
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !railRef.current) {
+      return
+    }
+
+    cancelInertiaFrame()
+    railRef.current.scrollTo({
+      left: railRef.current.scrollLeft,
+      behavior: 'auto',
+    })
+    dragStateRef.current.pointerId = event.pointerId
+    dragStateRef.current.captured = false
+    dragStateRef.current.startX = event.clientX
+    dragStateRef.current.startScrollLeft = railRef.current.scrollLeft
+    dragStateRef.current.pendingScrollLeft = railRef.current.scrollLeft
+    dragStateRef.current.moved = false
+    dragStateRef.current.velocity = 0
+    dragStateRef.current.lastClientX = event.clientX
+    dragStateRef.current.lastTimestamp = performance.now()
+    suppressClickRef.current = false
+    railRef.current.setPointerCapture(event.pointerId)
+  }, [cancelInertiaFrame])
+
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!railRef.current || dragStateRef.current.pointerId !== event.pointerId) {
+      return
+    }
+
+    const deltaX = event.clientX - dragStateRef.current.startX
+    const acceleratedDelta =
+      deltaX * 1.22 + Math.sign(deltaX) * Math.min(Math.abs(deltaX), 96) * 0.24
+    if (!dragStateRef.current.moved && Math.abs(deltaX) > 6) {
+      dragStateRef.current.moved = true
+      if (!dragStateRef.current.captured && railRef.current) {
+        railRef.current.setPointerCapture(event.pointerId)
+        dragStateRef.current.captured = true
+      }
+      suppressClickRef.current = true
+      setDragging(true)
+    }
+
+    if (!dragStateRef.current.moved) {
+      return
+    }
+
+    const now = performance.now()
+    const elapsed = Math.max(1, now - dragStateRef.current.lastTimestamp)
+    const velocitySample = ((dragStateRef.current.lastClientX - event.clientX) / elapsed) * 1.5
+    dragStateRef.current.velocity = dragStateRef.current.velocity * 0.22 + velocitySample * 0.78
+    dragStateRef.current.lastClientX = event.clientX
+    dragStateRef.current.lastTimestamp = now
+
+    dragStateRef.current.pendingScrollLeft = dragStateRef.current.startScrollLeft - acceleratedDelta
+    if (dragStateRef.current.scrollRafId === null) {
+      dragStateRef.current.scrollRafId = window.requestAnimationFrame(() => {
+        if (railRef.current) {
+          railRef.current.scrollLeft = clampScrollLeft(railRef.current, dragStateRef.current.pendingScrollLeft)
+        }
+        dragStateRef.current.scrollRafId = null
+      })
+    }
+
+    event.preventDefault()
+  }, [clampScrollLeft])
+
+  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragStateRef.current.pointerId !== event.pointerId) {
+      return
+    }
+
+    finishDrag(event)
+  }, [finishDrag])
+
+  const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragStateRef.current.pointerId !== event.pointerId) {
+      return
+    }
+
+    finishDrag(event)
+  }, [finishDrag])
+
+  const handleClickCapture = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!suppressClickRef.current) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+  }, [])
+
+  const shouldSuppressActivation = useCallback(() => suppressClickRef.current || dragging, [dragging])
+
+  return {
+    dragging,
+    railRef,
+    shouldSuppressActivation,
+    dragProps: {
+      onClickCapture: handleClickCapture,
+      onPointerCancel: handlePointerCancel,
+      onPointerDown: handlePointerDown,
+      onPointerMove: handlePointerMove,
+      onPointerUp: handlePointerUp,
+    },
+  }
+}
+
 function FeaturedBannerMedia({
   asset,
   assets,
@@ -468,41 +1113,16 @@ function FeaturedBannerMedia({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [videoReady, setVideoReady] = useState(asset.type === 'image')
 
-  useEffect(() => {
-    if (asset.type !== 'video' || !videoRef.current) {
-      return
-    }
-
-    const videoElement = videoRef.current
-    videoElement.load()
-
-    const playPromise = videoElement.play()
-    if (playPromise) {
-      void playPromise.catch(() => {
-        setVideoReady(false)
-      })
-    }
-  }, [asset.path, asset.type, muted])
+  useResilientVideoPlayback(videoRef, {
+    enabled: asset.type === 'video',
+    paused,
+    recoverOnUnexpectedPause: true,
+    sourceKey: `${asset.path}:${muted ? 'muted' : 'unmuted'}`,
+  })
 
   useEffect(() => {
-    if (asset.type !== 'video' || !videoRef.current) {
-      return
-    }
-
-    const videoElement = videoRef.current
-
-    if (paused) {
-      videoElement.pause()
-      return
-    }
-
-    const playPromise = videoElement.play()
-    if (playPromise) {
-      void playPromise.catch(() => {
-        setVideoReady(false)
-      })
-    }
-  }, [asset.path, asset.type, muted, paused])
+    setVideoReady(asset.type === 'image')
+  }, [asset.path, asset.type])
 
   if (asset.type === 'image') {
     return <img alt={asset.name} src={assetUrl} />
@@ -521,9 +1141,11 @@ function FeaturedBannerMedia({
         autoPlay
         className={`featuredBannerVideo ${videoReady ? 'featuredBannerVideoReady' : ''}`}
         controls={false}
+        draggable={false}
         loop
         muted={muted}
         onCanPlay={() => setVideoReady(true)}
+        onDragStart={(event: ReactDragEvent<HTMLVideoElement>) => event.preventDefault()}
         onError={() => setVideoReady(false)}
         onLoadedData={() => setVideoReady(true)}
         onPlaying={() => setVideoReady(true)}
@@ -563,6 +1185,7 @@ function HallMediaPreview({
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, assets)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [videoReady, setVideoReady] = useState(asset.type !== 'video')
   const imageProps = {
     alt,
     draggable: false,
@@ -570,47 +1193,59 @@ function HallMediaPreview({
   }
 
   useEffect(() => {
-    if (asset.type !== 'video' || !videoRef.current || (!active && previewImageUrl)) {
-      return
-    }
+    setVideoReady(asset.type !== 'video')
+  }, [asset.path, asset.type])
 
-    const videoElement = videoRef.current
-
-    if (paused) {
-      videoElement.pause()
-      return
-    }
-
-    const playPromise = videoElement.play()
-    if (playPromise) {
-      void playPromise.catch(() => {})
-    }
-  }, [active, asset.path, asset.type, muted, paused, previewImageUrl])
+  useResilientVideoPlayback(videoRef, {
+    enabled: asset.type === 'video' && (active || !previewImageUrl),
+    paused,
+    recoverOnUnexpectedPause: true,
+    sourceKey: `${asset.path}:${active ? 'active' : 'inactive'}:${muted ? 'muted' : 'unmuted'}`,
+  })
 
   if (asset.type === 'video') {
     if (active || !previewImageUrl) {
       return (
-        <video
-          autoPlay
-          loop={loopVideos}
-          muted={muted}
-          onEnded={onVideoEnded}
-          playsInline
-          preload="metadata"
-          ref={videoRef}
-          src={assetUrl}
-        />
+        <>
+          <video
+            autoPlay
+            className={videoReady ? undefined : 'hallMediaVideoPending'}
+            draggable={false}
+            key={asset.path}
+            loop={loopVideos}
+            muted={muted}
+            onCanPlay={() => setVideoReady(true)}
+            onDragStart={(event: ReactDragEvent<HTMLVideoElement>) => event.preventDefault()}
+            onEnded={onVideoEnded}
+            onError={() => setVideoReady(false)}
+            onLoadedData={() => setVideoReady(true)}
+            onPlaying={() => setVideoReady(true)}
+            playsInline
+            poster={previewImageUrl ?? undefined}
+            preload="metadata"
+            ref={videoRef}
+            src={assetUrl}
+          />
+          {previewImageUrl ? (
+            <img
+              {...imageProps}
+              className={videoReady ? 'hallMediaPoster hallMediaPosterHidden' : 'hallMediaPoster'}
+              key={`${asset.path}-poster`}
+              src={previewImageUrl}
+            />
+          ) : null}
+        </>
       )
     }
 
-    return <img {...imageProps} src={previewImageUrl} />
+    return <img {...imageProps} key={asset.path} src={previewImageUrl} />
   }
 
-  return <img {...imageProps} src={assetUrl} />
+  return <img {...imageProps} key={asset.path} src={assetUrl} />
 }
 
 function HomePage() {
-  const { galleryState, loading, busy, error, bridgeReady, refreshCollections, importFolder, removeImportPath } =
+  const { galleryState, loading, busy, error, bridgeReady, refreshCollections, importFolder, removeImportPath, t } =
     useGallery()
   const navigate = useNavigate()
   const featuredEntries = getResolvedFeaturedEntries(galleryState)
@@ -666,19 +1301,17 @@ function HomePage() {
     <div className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Dashboard</p>
-          <h1>Digital Collection Gallery</h1>
-          <p className="subtitle">
-            Manage imported collections here, then open the dedicated hall page for immersive browsing.
-          </p>
+          <p className="eyebrow">{t('homeEyebrow')}</p>
+          <h1>{t('homeTitle')}</h1>
+          <p className="subtitle">{t('homeSubtitle')}</p>
         </div>
 
         <div className="topbarActions">
           <button className="primaryButton" type="button" onClick={() => navigate('/hall')}>
-            Open Hall
+            {t('openHall')}
           </button>
           <button className="ghostButton" type="button" onClick={() => navigate('/settings')}>
-            Settings
+            {t('settings')}
           </button>
           <button
             className="ghostButton"
@@ -686,7 +1319,7 @@ function HomePage() {
             type="button"
             onClick={() => void refreshCollections()}
           >
-            Rescan
+            {t('rescan')}
           </button>
           <button
             className="primaryButton"
@@ -694,7 +1327,7 @@ function HomePage() {
             type="button"
             onClick={() => void importFolder()}
           >
-            Import Folder
+            {t('importFolder')}
           </button>
         </div>
       </header>
@@ -880,7 +1513,7 @@ function HomePage() {
 }
 
 function HallPage() {
-  const { galleryState, busy, error, updateConfig } = useGallery()
+  const { galleryState, busy, error, updateConfig, t } = useGallery()
   const navigate = useNavigate()
   const portraitHallLayout = usePortraitHallLayout()
   const configuredFeaturedEntries = getResolvedFeaturedEntries(galleryState)
@@ -891,8 +1524,15 @@ function HallPage() {
   const [hallRandomSeed, setHallRandomSeed] = useState(0)
   const hallViewportRef = useRef<HTMLDivElement | null>(null)
   const hallThumbRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const pendingHallThumbIndexRef = useRef<number | null>(null)
   const portraitMenuRef = useRef<HTMLDivElement | null>(null)
   const hallControlMenuRef = useRef<HTMLDivElement | null>(null)
+  const {
+    dragging: hallEntryRailDragging,
+    railRef: hallEntryRailRef,
+    shouldSuppressActivation: shouldSuppressHallEntryActivation,
+    dragProps: hallEntryRailDragProps,
+  } = useHorizontalDragScroll()
   const hallTransitionKeyRef = useRef(0)
   const activePointerIdRef = useRef<number | null>(null)
   const pointerActionRef = useRef<HallViewportAction | null>(null)
@@ -944,10 +1584,10 @@ function HallPage() {
   const randomMixedAvailable = galleryState.collections.some((collection) => collection.assets.length > 0)
   const hallPlaybackModeLabel =
     hallPlaybackMode === 'featured'
-      ? 'Featured Hall'
+      ? t('hallModeFeatured')
       : hallPlaybackMode === 'random_mp4'
-        ? 'Random MP4'
-        : 'Random Mixed'
+        ? t('hallModeRandomMp4')
+        : t('hallModeRandomMixed')
 
   const resolvedActiveIndex =
     featuredEntries.length === 0 ? 0 : Math.min(activeIndex, featuredEntries.length - 1)
@@ -984,6 +1624,7 @@ function HallPage() {
   const hallRotationIntervalSeconds = normalizeIntervalSeconds(galleryState.config.bannerIntervalSeconds, 8)
   const hallVideoAdvanceOnEnded = galleryState.config.fullscreenVideoAdvanceOnEnded
   const hallVideoWaitingBehavior = galleryState.config.fullscreenVideoWaitingBehavior
+  const hallVideoCompletesBeforeAdvance = hallVideoWaitingBehavior === 'complete'
   const [hallVideoAdvanceReady, setHallVideoAdvanceReady] = useState(false)
   const [hallVideoEndedBeforeAdvance, setHallVideoEndedBeforeAdvance] = useState(false)
   const {
@@ -1088,12 +1729,27 @@ function HallPage() {
     commitHallTransition(offset < 0 ? 'backward' : 'forward', nextIndex)
   }
 
+  function handleHallEntryRailPointerUpCapture() {
+    if (shouldSuppressHallEntryActivation()) {
+      pendingHallThumbIndexRef.current = null
+      return
+    }
+
+    const nextIndex = pendingHallThumbIndexRef.current
+    pendingHallThumbIndexRef.current = null
+    if (nextIndex === null || !Number.isFinite(nextIndex)) {
+      return
+    }
+
+    jumpToIndex(nextIndex)
+  }
+
   useEffect(() => {
     if (!hallRotationEnabled || featuredEntries.length <= 1 || autoRotatePaused || hallFullscreen) {
       return
     }
 
-    if (activeEntry?.asset?.type === 'video' && hallVideoAdvanceOnEnded) {
+    if (activeEntry?.asset?.type === 'video' && hallVideoAdvanceOnEnded && hallVideoWaitingBehavior !== 'none') {
       return
     }
 
@@ -1109,6 +1765,7 @@ function HallPage() {
     featuredEntries.length,
     hallRotationIntervalSeconds,
     hallVideoAdvanceOnEnded,
+    hallVideoWaitingBehavior,
     hallRotationEnabled,
     hallFullscreen,
     showNext,
@@ -1120,7 +1777,9 @@ function HallPage() {
       featuredEntries.length <= 1 ||
       hallFullscreen ||
       activeEntry?.asset?.type !== 'video' ||
-      !hallVideoAdvanceOnEnded
+      !hallVideoAdvanceOnEnded ||
+      hallVideoWaitingBehavior === 'none' ||
+      hallVideoCompletesBeforeAdvance
     ) {
       setHallVideoAdvanceReady(false)
       setHallVideoEndedBeforeAdvance(false)
@@ -1143,6 +1802,8 @@ function HallPage() {
     hallRotationEnabled,
     hallRotationIntervalSeconds,
     hallVideoAdvanceOnEnded,
+    hallVideoCompletesBeforeAdvance,
+    hallVideoWaitingBehavior,
   ])
 
   useEffect(() => {
@@ -1178,6 +1839,15 @@ function HallPage() {
     }
 
     if (!hallVideoAdvanceOnEnded) {
+      return
+    }
+
+    if (hallVideoCompletesBeforeAdvance) {
+      showNext()
+      return
+    }
+
+    if (hallVideoWaitingBehavior === 'none') {
       return
     }
 
@@ -1241,6 +1911,22 @@ function HallPage() {
     return null
   }
 
+  function shouldStartViewportGesture(target: HTMLElement | null) {
+    if (portraitHallLayout) {
+      return true
+    }
+
+    if (!target) {
+      return false
+    }
+
+    return Boolean(
+      target.closest(
+        '[data-hall-action], .hallHeroCard, .hallFlatHeroCard, .hallSideCard, .hallFlatSideCard, .viewerNav',
+      ),
+    )
+  }
+
   function performViewportAction(action: HallViewportAction) {
     if (action.type === 'fullscreen') {
       if (activeEntry?.asset) {
@@ -1264,6 +1950,10 @@ function HallPage() {
 
     const target = event.target as HTMLElement | null
     if (target?.closest('.hallPortraitOverlay, .viewerNav')) {
+      return
+    }
+
+    if (!shouldStartViewportGesture(target)) {
       return
     }
 
@@ -1463,7 +2153,7 @@ function HallPage() {
 
   return (
     <div className="shell hallShell">
-      {activeBackdropUrl ? (
+      {!hallFullscreen && activeBackdropUrl ? (
         <div className="hallBackdrop" aria-hidden="true">
           {activeBackdropVideo ? (
             <video autoPlay loop muted playsInline preload="metadata" src={activeBackdropVideo} />
@@ -1472,7 +2162,7 @@ function HallPage() {
           )}
         </div>
       ) : null}
-      {hallTransitionSnapshot?.backdropUrl ? (
+      {!hallFullscreen && hallTransitionSnapshot?.backdropUrl ? (
         <div
           aria-hidden="true"
           className={`hallBackdrop hallBackdropLeaving ${
@@ -1492,24 +2182,21 @@ function HallPage() {
 
       <header className="topbar">
         <div>
-          <p className="eyebrow">Featured Hall</p>
-          <h1>Curated Display</h1>
-          <p className="subtitle">
-            This page is now the dedicated exhibition layer. Drag, scroll, or use the arrow keys to
-            rotate the featured card ring.
-          </p>
+          <p className="eyebrow">{t('featuredHallEyebrow')}</p>
+          <h1>{t('featuredHallTitle')}</h1>
+          <p className="subtitle">{t('featuredHallSubtitle')}</p>
         </div>
 
         <div className="topbarActions">
           <button className="ghostButton" type="button" onClick={() => navigate('/')}>
-            Dashboard
+            {t('dashboard')}
           </button>
           <button
             className="ghostButton"
             type="button"
             onClick={() => navigate('/hall-settings', { state: { fromPath: '/hall' } })}
           >
-            Edit Entries
+            {t('editEntries')}
           </button>
         </div>
       </header>
@@ -1519,29 +2206,148 @@ function HallPage() {
       <main className="hallLayout">
         <section className="hallStagePanel">
           <div className="hallStageHeader">
-            <p className="sectionTag">Featured Ring</p>
+            <p className="sectionTag">{t('featuredRing')}</p>
             <div className="hallStageMeta">
               <span className="pill">
                 {featuredEntries.length > 0 ? `${resolvedActiveIndex + 1} / ${featuredEntries.length}` : '0 / 0'}
               </span>
               <span className="pill">{hallPlaybackModeLabel}</span>
-              <span className="pill">{hallRotationEnabled ? 'Rotation On' : 'Rotation Off'}</span>
+              <span className="pill">{hallRotationEnabled ? t('rotationOn') : t('rotationOff')}</span>
             </div>
           </div>
+
+          {portraitHallLayout ? (
+            <div className="hallPortraitOverlay" ref={portraitMenuRef}>
+              <button
+                aria-label="Back to dashboard"
+                className="hallPortraitBackButton"
+                type="button"
+                onClick={() => navigate('/')}
+              />
+
+              <div aria-hidden="true" className="hallPortraitDragHandle" />
+
+              <div className="hallPortraitControls">
+                <div className="hallPortraitMenuWrap">
+                  <button
+                    aria-expanded={portraitMenuOpen}
+                    aria-haspopup="menu"
+                    aria-label="Open hall menu"
+                    className="hallPortraitMenuButton"
+                    type="button"
+                    onClick={() => setPortraitMenuOpen((current) => !current)}
+                  />
+
+                  {portraitMenuOpen ? (
+                    <div className="hallPortraitMenu" role="menu">
+                      <button
+                        className={`hallPortraitMenuItem ${
+                          galleryState.config.bannerVideoMuted ? 'hallPortraitMenuItemActive' : ''
+                        }`}
+                        disabled={busy}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          setPortraitMenuOpen(false)
+                          void handleTogglePortraitMute()
+                        }}
+                      >
+                        {galleryState.config.bannerVideoMuted ? t('unmuteFeaturedVideos') : t('muteFeaturedVideos')}
+                      </button>
+                      <button
+                        className={`hallPortraitMenuItem ${hallRotationEnabled ? 'hallPortraitMenuItemActive' : ''}`}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          setPortraitMenuOpen(false)
+                          setHallRotationEnabled((current) => !current)
+                        }}
+                      >
+                        {hallRotationEnabled ? t('pauseHallRotation') : t('resumeHallRotation')}
+                      </button>
+                      <button
+                        className={`hallPortraitMenuItem ${hallPlaybackMode === 'featured' ? 'hallPortraitMenuItemActive' : ''}`}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => activateHallPlaybackMode('featured')}
+                      >
+                        {hallPlaybackMode === 'featured' ? t('featuredHallActive') : t('switchToFeaturedHall')}
+                      </button>
+                      <button
+                        className={`hallPortraitMenuItem ${hallPlaybackMode === 'random_mp4' ? 'hallPortraitMenuItemActive' : ''}`}
+                        disabled={!randomMp4Available}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => activateHallPlaybackMode('random_mp4')}
+                      >
+                        {hallPlaybackMode === 'random_mp4' ? t('reshuffleRandomMp4') : t('randomMp4FromAllCollections')}
+                      </button>
+                      <button
+                        className={`hallPortraitMenuItem ${hallPlaybackMode === 'random_mixed' ? 'hallPortraitMenuItemActive' : ''}`}
+                        disabled={!randomMixedAvailable}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => activateHallPlaybackMode('random_mixed')}
+                      >
+                        {hallPlaybackMode === 'random_mixed' ? t('reshuffleRandomMedia') : t('randomMediaFromAllCollections')}
+                      </button>
+                      <button
+                        className="hallPortraitMenuItem"
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          setPortraitMenuOpen(false)
+                          navigate('/hall-settings', { state: { fromPath: '/hall' } })
+                        }}
+                      >
+                        {t('hallSettings')}
+                      </button>
+                      {activeEntry?.asset ? (
+                        <button
+                          className="hallPortraitMenuItem"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => {
+                            setPortraitMenuOpen(false)
+                            setHallFullscreen(true)
+                          }}
+                        >
+                          {t('expandMedia')}
+                        </button>
+                      ) : null}
+                      {activeEntry ? (
+                        <button
+                          className="hallPortraitMenuItem"
+                          role="menuitem"
+                          type="button"
+                          onClick={() => {
+                            setPortraitMenuOpen(false)
+                            navigate(`/collections/${activeEntry.collection.id}`)
+                          }}
+                        >
+                          {t('openCollection')}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {featuredEntries.length === 0 ? (
             <div className="emptyState">
               <strong>
                 {hallPlaybackMode === 'featured'
-                  ? 'No featured cards configured yet.'
+                  ? t('noFeaturedCardsConfigured')
                   : hallPlaybackMode === 'random_mp4'
-                    ? 'No MP4 assets available for random playback.'
-                    : 'No assets available for random playback.'}
+                    ? t('noRandomMp4Assets')
+                    : t('noRandomAssets')}
               </strong>
               <p>
                 {hallPlaybackMode === 'featured'
-                  ? 'Open Hall Settings and add at least one featured entry to populate the hall.'
-                  : 'Import more collection folders or switch back to the featured hall mode.'}
+                  ? t('hallEmptyFeaturedHint')
+                  : t('hallEmptyRandomHint')}
               </p>
             </div>
           ) : (
@@ -1562,125 +2368,6 @@ function HallPage() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
             >
-              {portraitHallLayout ? (
-                <div className="hallPortraitOverlay" ref={portraitMenuRef}>
-                  <button
-                    aria-label="Back to dashboard"
-                    className="hallPortraitBackButton"
-                    type="button"
-                    onClick={() => navigate('/')}
-                  />
-
-                  <div aria-hidden="true" className="hallPortraitDragHandle" />
-
-                  <div className="hallPortraitControls">
-                    <div className="hallPortraitMenuWrap">
-                      <button
-                        aria-expanded={portraitMenuOpen}
-                        aria-haspopup="menu"
-                        aria-label="Open hall menu"
-                        className="hallPortraitMenuButton"
-                        type="button"
-                        onClick={() => setPortraitMenuOpen((current) => !current)}
-                      />
-
-                      {portraitMenuOpen ? (
-                        <div className="hallPortraitMenu" role="menu">
-                          <button
-                            className={`hallPortraitMenuItem ${
-                              galleryState.config.bannerVideoMuted ? 'hallPortraitMenuItemActive' : ''
-                            }`}
-                            disabled={busy}
-                            role="menuitem"
-                            type="button"
-                            onClick={() => {
-                              setPortraitMenuOpen(false)
-                              void handleTogglePortraitMute()
-                            }}
-                          >
-                            {galleryState.config.bannerVideoMuted ? 'Unmute featured videos' : 'Mute featured videos'}
-                          </button>
-                          <button
-                            className={`hallPortraitMenuItem ${hallRotationEnabled ? 'hallPortraitMenuItemActive' : ''}`}
-                            role="menuitem"
-                            type="button"
-                            onClick={() => {
-                              setPortraitMenuOpen(false)
-                              setHallRotationEnabled((current) => !current)
-                            }}
-                          >
-                            {hallRotationEnabled ? 'Pause hall rotation' : 'Resume hall rotation'}
-                          </button>
-                          <button
-                            className={`hallPortraitMenuItem ${hallPlaybackMode === 'featured' ? 'hallPortraitMenuItemActive' : ''}`}
-                            role="menuitem"
-                            type="button"
-                            onClick={() => activateHallPlaybackMode('featured')}
-                          >
-                            {hallPlaybackMode === 'featured' ? 'Featured hall active' : 'Switch to featured hall'}
-                          </button>
-                          <button
-                            className={`hallPortraitMenuItem ${hallPlaybackMode === 'random_mp4' ? 'hallPortraitMenuItemActive' : ''}`}
-                            disabled={!randomMp4Available}
-                            role="menuitem"
-                            type="button"
-                            onClick={() => activateHallPlaybackMode('random_mp4')}
-                          >
-                            {hallPlaybackMode === 'random_mp4' ? 'Reshuffle random MP4' : 'Random MP4 from all collections'}
-                          </button>
-                          <button
-                            className={`hallPortraitMenuItem ${hallPlaybackMode === 'random_mixed' ? 'hallPortraitMenuItemActive' : ''}`}
-                            disabled={!randomMixedAvailable}
-                            role="menuitem"
-                            type="button"
-                            onClick={() => activateHallPlaybackMode('random_mixed')}
-                          >
-                            {hallPlaybackMode === 'random_mixed' ? 'Reshuffle random media' : 'Random media from all collections'}
-                          </button>
-                          <button
-                            className="hallPortraitMenuItem"
-                            role="menuitem"
-                            type="button"
-                            onClick={() => {
-                              setPortraitMenuOpen(false)
-                              navigate('/hall-settings', { state: { fromPath: '/hall' } })
-                            }}
-                          >
-                            Hall Settings
-                          </button>
-                          {activeEntry?.asset ? (
-                            <button
-                              className="hallPortraitMenuItem"
-                              role="menuitem"
-                              type="button"
-                              onClick={() => {
-                                setPortraitMenuOpen(false)
-                                setHallFullscreen(true)
-                              }}
-                            >
-                              Expand Media
-                            </button>
-                          ) : null}
-                          {activeEntry ? (
-                            <button
-                              className="hallPortraitMenuItem"
-                              role="menuitem"
-                              type="button"
-                              onClick={() => {
-                                setPortraitMenuOpen(false)
-                                navigate(`/collections/${activeEntry.collection.id}`)
-                              }}
-                            >
-                              Open Collection
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
               <button
                 aria-label="Previous featured card"
                 className="viewerNav hallNavButton hallNavButtonLeft"
@@ -1781,6 +2468,7 @@ function HallPage() {
                                 activeEntry.asset?.type !== 'video' ||
                                 !hallRotationEnabled ||
                                 !hallVideoAdvanceOnEnded ||
+                                hallVideoWaitingBehavior === 'none' ||
                                 (hallVideoWaitingBehavior === 'replay' && !hallVideoAdvanceReady)
                               }
                               muted={galleryState.config.bannerVideoMuted}
@@ -1976,6 +2664,7 @@ function HallPage() {
                                 activeEntry.asset?.type !== 'video' ||
                                 !hallRotationEnabled ||
                                 !hallVideoAdvanceOnEnded ||
+                                hallVideoWaitingBehavior === 'none' ||
                                 (hallVideoWaitingBehavior === 'replay' && !hallVideoAdvanceReady)
                               }
                               muted={galleryState.config.bannerVideoMuted}
@@ -2023,8 +2712,17 @@ function HallPage() {
           ) : null}
 
           {featuredEntries.length > 0 ? (
-            <div className="hallEntryDock">
-              <div className="hallEntryRail">
+            <div
+              className="hallEntryDock"
+              onPointerEnter={() => setAutoRotatePaused(true)}
+              onPointerLeave={() => setAutoRotatePaused(false)}
+            >
+              <div
+                className={`hallEntryRail ${hallEntryRailDragging ? 'hallEntryRailDragging' : ''}`}
+                ref={hallEntryRailRef}
+                {...hallEntryRailDragProps}
+                onPointerUpCapture={handleHallEntryRailPointerUpCapture}
+              >
                 {featuredEntries.map((featured, index) => {
                   const previewImageUrl = featured.asset
                     ? getPreviewImageUrl(featured.asset, featured.collection.assets)
@@ -2036,18 +2734,27 @@ function HallPage() {
                     <button
                       aria-current={index === resolvedActiveIndex ? 'true' : undefined}
                       className={`hallEntryThumb ${index === resolvedActiveIndex ? 'hallEntryThumbActive' : ''}`}
+                      data-hall-thumb-index={index}
                       key={`hall-thumb-${featured.entry.id}`}
+                      onPointerDownCapture={() => {
+                        pendingHallThumbIndexRef.current = index
+                      }}
                       ref={(node) => {
                         hallThumbRefs.current[index] = node
                       }}
                       type="button"
-                          onClick={() => jumpToIndex(index)}
-                        >
+                      onKeyDown={(event) => {
+                        if ((event.key === 'Enter' || event.key === ' ') && !shouldSuppressHallEntryActivation()) {
+                          event.preventDefault()
+                          jumpToIndex(index)
+                        }
+                      }}
+                    >
                       <div className="hallEntryThumbMedia">
                         {thumbUrl ? (
                           <img alt={featured.entry.title || featured.collection.displayName} src={thumbUrl} />
                         ) : (
-                          <div className="collectionPlaceholder">No preview</div>
+                          <div className="collectionPlaceholder">{t('noPreview')}</div>
                         )}
                       </div>
                     </button>
@@ -2061,7 +2768,7 @@ function HallPage() {
         <section className="gridPanel hallInfoPanel">
           {activeEntry ? (
             <div className="hallInfoBody">
-              <p className="sectionTag">Current Card</p>
+              <p className="sectionTag">{t('currentCard')}</p>
               <button
                 className="hallTitleButton"
                 type="button"
@@ -2071,7 +2778,7 @@ function HallPage() {
               </button>
               <div className="hallInfoMeta">
                 <span>CD.{activeEntry.collection.id}</span>
-                <span>{activeEntry.asset?.type === 'video' ? 'Video' : 'Image'}</span>
+                <span>{activeEntry.asset?.type === 'video' ? t('mediaVideo') : t('mediaImage')}</span>
                 <span>{hallPlaybackModeLabel}</span>
               </div>
               <p className="subtitle">{activeSubtitle}</p>
@@ -2082,7 +2789,7 @@ function HallPage() {
                   type="button"
                   onClick={() => setHallFullscreen(true)}
                 >
-                  Expand Media
+                  {t('expandMedia')}
                 </button>
                 <div className="hallControlMenuWrap" ref={hallControlMenuRef}>
                   <button
@@ -2092,7 +2799,7 @@ function HallPage() {
                     type="button"
                     onClick={() => setHallControlMenuOpen((current) => !current)}
                   >
-                    Hall Controls
+                    {t('hallControls')}
                   </button>
                   {hallControlMenuOpen ? (
                     <div className="hallControlMenu" role="menu">
@@ -2108,7 +2815,7 @@ function HallPage() {
                           void handleTogglePortraitMute()
                         }}
                       >
-                        {galleryState.config.bannerVideoMuted ? 'Unmute featured videos' : 'Mute featured videos'}
+                        {galleryState.config.bannerVideoMuted ? t('unmuteFeaturedVideos') : t('muteFeaturedVideos')}
                       </button>
                       <button
                         className={`hallControlMenuItem ${hallRotationEnabled ? 'hallControlMenuItemActive' : ''}`}
@@ -2119,7 +2826,7 @@ function HallPage() {
                           setHallRotationEnabled((current) => !current)
                         }}
                       >
-                        {hallRotationEnabled ? 'Pause hall rotation' : 'Resume hall rotation'}
+                        {hallRotationEnabled ? t('pauseHallRotation') : t('resumeHallRotation')}
                       </button>
                       <button
                         className={`hallControlMenuItem ${hallPlaybackMode === 'featured' ? 'hallControlMenuItemActive' : ''}`}
@@ -2127,7 +2834,7 @@ function HallPage() {
                         type="button"
                         onClick={() => activateHallPlaybackMode('featured')}
                       >
-                        {hallPlaybackMode === 'featured' ? 'Featured hall active' : 'Switch to featured hall'}
+                        {hallPlaybackMode === 'featured' ? t('featuredHallActive') : t('switchToFeaturedHall')}
                       </button>
                       <button
                         className={`hallControlMenuItem ${hallPlaybackMode === 'random_mp4' ? 'hallControlMenuItemActive' : ''}`}
@@ -2136,7 +2843,7 @@ function HallPage() {
                         type="button"
                         onClick={() => activateHallPlaybackMode('random_mp4')}
                       >
-                        {hallPlaybackMode === 'random_mp4' ? 'Reshuffle random MP4' : 'Random MP4 from all collections'}
+                        {hallPlaybackMode === 'random_mp4' ? t('reshuffleRandomMp4') : t('randomMp4FromAllCollections')}
                       </button>
                       <button
                         className={`hallControlMenuItem ${hallPlaybackMode === 'random_mixed' ? 'hallControlMenuItemActive' : ''}`}
@@ -2145,7 +2852,7 @@ function HallPage() {
                         type="button"
                         onClick={() => activateHallPlaybackMode('random_mixed')}
                       >
-                        {hallPlaybackMode === 'random_mixed' ? 'Reshuffle random media' : 'Random media from all collections'}
+                        {hallPlaybackMode === 'random_mixed' ? t('reshuffleRandomMedia') : t('randomMediaFromAllCollections')}
                       </button>
                     </div>
                   ) : null}
@@ -2155,14 +2862,14 @@ function HallPage() {
                   type="button"
                   onClick={() => navigate('/hall-settings', { state: { fromPath: '/hall' } })}
                 >
-                  Edit Entries
+                  {t('editEntries')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="emptyState">
-              <strong>No hall entries yet.</strong>
-              <p>Go to Hall Settings and start composing featured cards.</p>
+              <strong>{t('noHallEntriesYet')}</strong>
+              <p>{t('noHallEntriesHint')}</p>
             </div>
           )}
         </section>
@@ -2183,7 +2890,7 @@ function HallPage() {
 }
 
 function SettingsPage() {
-  const { galleryState, loading, busy, error, bridgeReady, updateConfig, updateCollection } = useGallery()
+  const { galleryState, loading, busy, error, bridgeReady, updateConfig, updateCollection, t } = useGallery()
   const navigate = useNavigate()
 
   return (
@@ -2191,14 +2898,12 @@ function SettingsPage() {
       <header className="detailTopbar">
         <div className="detailTitleBlock">
           <button className="ghostButton" type="button" onClick={() => navigate('/')}>
-            Back
+            {t('back')}
           </button>
           <div className="viewerInfoCard">
-            <p className="eyebrow">Settings</p>
-            <h1>Collection Settings</h1>
-            <p className="subtitle">
-              Edit display names, manual covers, and featured media for each imported collection.
-            </p>
+            <p className="eyebrow">{t('settingsEyebrow')}</p>
+            <h1>{t('collectionSettingsTitle')}</h1>
+            <p className="subtitle">{t('collectionSettingsSubtitle')}</p>
           </div>
         </div>
       </header>
@@ -2216,27 +2921,24 @@ function SettingsPage() {
         <section className="gridPanel settingsPanel">
           <div className="panelHeader">
             <div>
-              <p className="sectionTag">Hall Settings</p>
-              <h2>Featured hall cards are managed separately now</h2>
+              <p className="sectionTag">{t('routeHallSettings')}</p>
+              <h2>{t('hallSettingsCardTitle')}</h2>
             </div>
           </div>
 
           <article className="settingsTextPanel hallSettingsShortcutCard">
             <div className="settingsBody">
-              <p className="subtitle">
-                Open the dedicated Hall Settings page to edit featured entries, hall rotation, fullscreen playback
-                behavior, and preview each card in one place.
-              </p>
+              <p className="subtitle">{t('hallSettingsCardSubtitle')}</p>
               <div className="settingsActions">
                 <button
                   className="primaryButton"
                   type="button"
                   onClick={() => navigate('/hall-settings', { state: { fromPath: '/settings' } })}
                 >
-                  Open Hall Settings
+                  {t('openHallSettings')}
                 </button>
                 <button className="ghostButton" type="button" onClick={() => navigate('/hall')}>
-                  Preview Hall
+                  {t('previewHall')}
                 </button>
               </div>
             </div>
@@ -2246,10 +2948,10 @@ function SettingsPage() {
         <section className="gridPanel settingsPanel">
           <div className="panelHeader">
             <div>
-              <p className="sectionTag">Imported Collections</p>
+              <p className="sectionTag">{t('importedCollections')}</p>
               <h2>
                 {loading
-                  ? 'Loading settings...'
+                  ? t('loadingSettings')
                   : `${galleryState.collections.length} collection setting row(s) available`}
               </h2>
             </div>
@@ -2257,8 +2959,8 @@ function SettingsPage() {
 
           {galleryState.collections.length === 0 ? (
             <div className="emptyState">
-              <strong>No collections imported yet.</strong>
-              <p>Return to the home page and import at least one numeric collection folder first.</p>
+              <strong>{t('noCollectionsImported')}</strong>
+              <p>{t('noCollectionsImportedHint')}</p>
             </div>
           ) : (
             <div className="settingsList">
@@ -2289,27 +2991,32 @@ function DisplaySettingsSection({
   busy: boolean
   bridgeReady: boolean
   onSave: (updates: {
+    language?: AppLanguage
     uiScale?: number
   }) => Promise<void>
 }) {
+  const { t } = useGallery()
   const [uiScalePercent, setUiScalePercent] = useState(String(Math.round(config.uiScale * 100)))
+  const [language, setLanguage] = useState<AppLanguage>(config.language)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setUiScalePercent(String(Math.round(config.uiScale * 100)))
-  }, [config.uiScale])
+    setLanguage(config.language)
+  }, [config.language, config.uiScale])
 
   const normalizedScalePercent = Number(uiScalePercent)
   const safeScalePercent = Number.isFinite(normalizedScalePercent)
     ? Math.min(125, Math.max(75, Math.round(normalizedScalePercent)))
     : Math.round(config.uiScale * 100)
   const normalizedScale = safeScalePercent / 100
-  const isDirty = Math.abs(normalizedScale - config.uiScale) > 0.001
+  const isDirty = Math.abs(normalizedScale - config.uiScale) > 0.001 || language !== config.language
 
   async function handleSave() {
     setSaving(true)
     try {
       await onSave({
+        language,
         uiScale: normalizedScale,
       })
     } finally {
@@ -2319,18 +3026,18 @@ function DisplaySettingsSection({
 
   return (
     <section className="gridPanel settingsPanel">
-      <div className="panelHeader">
-        <div>
-          <p className="sectionTag">Display</p>
-          <h2>Interface Scale</h2>
+        <div className="panelHeader">
+          <div>
+            <p className="sectionTag">{t('display')}</p>
+            <h2>{t('interfaceScale')}</h2>
+          </div>
         </div>
-      </div>
 
-      <article className="settingsTextPanel">
-        <div className="settingsBody">
-          <label className="settingsField">
-            <span>Scale Percentage</span>
-            <div className="settingsScaleRow">
+        <article className="settingsTextPanel">
+          <div className="settingsBody">
+            <label className="settingsField">
+              <span>{t('scalePercentage')}</span>
+              <div className="settingsScaleRow">
               <input
                 className="settingsRange"
                 max="125"
@@ -2351,12 +3058,21 @@ function DisplaySettingsSection({
               />
               <span className="settingsScaleSuffix">%</span>
             </div>
-          </label>
+            </label>
 
-          <p className="settingsHint">
-            Adjust the overall application size. `100%` is the default size. Smaller values make the whole interface
-            denser, including the dashboard, hall, and collection pages.
-          </p>
+            <label className="settingsField">
+              <span>{t('language')}</span>
+              <select
+                className="settingsSelect"
+                value={language}
+                onChange={(event) => setLanguage(event.target.value as AppLanguage)}
+              >
+                <option value="en">{t('english')}</option>
+                <option value="zh">{t('chinese')}</option>
+              </select>
+            </label>
+
+            <p className="settingsHint">{t('displayHint')}</p>
 
           <div className="settingsActions">
             <button
@@ -2365,15 +3081,18 @@ function DisplaySettingsSection({
               type="button"
               onClick={() => void handleSave()}
             >
-              {saving ? 'Saving...' : 'Save Display Settings'}
+              {saving ? 'Saving...' : t('saveDisplaySettings')}
             </button>
             <button
               className="ghostButton"
               disabled={saving || !isDirty}
               type="button"
-              onClick={() => setUiScalePercent(String(Math.round(config.uiScale * 100)))}
+              onClick={() => {
+                setUiScalePercent(String(Math.round(config.uiScale * 100)))
+                setLanguage(config.language)
+              }}
             >
-              Reset
+              {t('reset')}
             </button>
           </div>
         </div>
@@ -2383,7 +3102,7 @@ function DisplaySettingsSection({
 }
 
 function HallSettingsPage() {
-  const { galleryState, busy, error, bridgeReady, updateConfig } = useGallery()
+  const { galleryState, busy, error, bridgeReady, updateConfig, t } = useGallery()
   const location = useLocation()
   const navigate = useNavigate()
   const backPath =
@@ -2398,16 +3117,11 @@ function HallSettingsPage() {
     <div className="shell">
       <header className="detailTopbar">
         <div className="detailTitleBlock">
-          <button className="ghostButton" type="button" onClick={() => navigate(backPath)}>
-            Back
-          </button>
+          <button className="ghostButton" type="button" onClick={() => navigate(backPath)}>{t('back')}</button>
           <div className="viewerInfoCard">
-            <p className="eyebrow">Hall Settings</p>
-            <h1>Featured Hall Builder</h1>
-            <p className="subtitle">
-              Configure the curated cards shown in the exhibition hall. Each entry can target any
-              collection and any media item, with its own title, subtitle, and preview.
-            </p>
+            <p className="eyebrow">{t('hallSettingsEyebrow')}</p>
+            <h1>{t('hallSettingsTitle')}</h1>
+            <p className="subtitle">{t('hallSettingsSubtitle')}</p>
           </div>
         </div>
       </header>
@@ -2448,10 +3162,11 @@ function HallPlaybackSettingsSection({
     fullscreenSlideshowEnabled?: boolean
     fullscreenSlideshowIntervalSeconds?: number
     fullscreenVideoAdvanceOnEnded?: boolean
-    fullscreenVideoWaitingBehavior?: 'replay' | 'pause'
+    fullscreenVideoWaitingBehavior?: 'none' | 'complete' | 'replay' | 'pause'
     fullscreenSlideshowShuffleAllCollections?: boolean
   }) => Promise<void>
 }) {
+  const { t } = useGallery()
   const [bannerIntervalSeconds, setBannerIntervalSeconds] = useState(String(config.bannerIntervalSeconds))
   const [bannerVideoMuted, setBannerVideoMuted] = useState(config.bannerVideoMuted)
   const [fullscreenSlideshowEnabled, setFullscreenSlideshowEnabled] = useState(config.fullscreenSlideshowEnabled)
@@ -2462,7 +3177,7 @@ function HallPlaybackSettingsSection({
     config.fullscreenVideoAdvanceOnEnded,
   )
   const [fullscreenVideoWaitingBehavior, setFullscreenVideoWaitingBehavior] = useState<
-    'replay' | 'pause'
+    'none' | 'complete' | 'replay' | 'pause'
   >(config.fullscreenVideoWaitingBehavior)
   const [fullscreenSlideshowShuffleAllCollections, setFullscreenSlideshowShuffleAllCollections] = useState(
     config.fullscreenSlideshowShuffleAllCollections,
@@ -2521,17 +3236,17 @@ function HallPlaybackSettingsSection({
 
   return (
     <section className="gridPanel settingsPanel">
-      <div className="panelHeader">
-        <div>
-          <p className="sectionTag">Hall Playback</p>
-          <h2>Rotation, Fullscreen, And Audio</h2>
+        <div className="panelHeader">
+          <div>
+            <p className="sectionTag">{t('hallPlaybackTag')}</p>
+            <h2>{t('hallPlaybackTitle')}</h2>
+          </div>
         </div>
-      </div>
 
       <article className="settingsTextPanel">
         <div className="settingsBody">
           <label className="settingsField">
-            <span>Rotation Interval Seconds</span>
+            <span>{t('rotationIntervalSeconds')}</span>
             <input
               className="settingsInput"
               min="2"
@@ -2548,12 +3263,10 @@ function HallPlaybackSettingsSection({
               type="checkbox"
               onChange={(event) => setBannerVideoMuted(event.target.checked)}
             />
-            <span>Mute featured banner videos</span>
+            <span>{t('muteFeaturedBannerVideos')}</span>
           </label>
 
-          <p className="settingsHint">
-            These settings control the Featured Hall rotation speed and the default audio behavior of banner videos.
-          </p>
+          <p className="settingsHint">{t('hallPlaybackHint')}</p>
 
           <label className="settingsToggle">
             <input
@@ -2561,11 +3274,11 @@ function HallPlaybackSettingsSection({
               type="checkbox"
               onChange={(event) => setFullscreenSlideshowEnabled(event.target.checked)}
             />
-            <span>Enable fullscreen slideshow</span>
+            <span>{t('enableFullscreenSlideshow')}</span>
           </label>
 
           <label className="settingsField">
-            <span>Fullscreen Slideshow Interval Seconds</span>
+            <span>{t('fullscreenSlideshowIntervalSeconds')}</span>
             <input
               className="settingsInput"
               disabled={!fullscreenSlideshowEnabled}
@@ -2584,21 +3297,23 @@ function HallPlaybackSettingsSection({
               type="checkbox"
               onChange={(event) => setFullscreenVideoAdvanceOnEnded(event.target.checked)}
             />
-            <span>Advance to the next fullscreen item when the current video ends</span>
+            <span>{t('advanceOnVideoEnd')}</span>
           </label>
 
           <label className="settingsField">
-            <span>If a fullscreen video ends before the minimum interval</span>
+            <span>{t('fullscreenWaitingBehavior')}</span>
             <select
               className="settingsSelect"
               disabled={!fullscreenSlideshowEnabled || !fullscreenVideoAdvanceOnEnded}
               value={fullscreenVideoWaitingBehavior}
               onChange={(event) =>
-                setFullscreenVideoWaitingBehavior(event.target.value as 'replay' | 'pause')
+                setFullscreenVideoWaitingBehavior(event.target.value as 'none' | 'complete' | 'replay' | 'pause')
               }
             >
-              <option value="replay">Replay until the minimum interval is reached</option>
-              <option value="pause">Pause on the last frame until the minimum interval is reached</option>
+              <option value="none">{t('waitingBehaviorNone')}</option>
+              <option value="complete">{t('waitingBehaviorComplete')}</option>
+              <option value="replay">{t('waitingBehaviorReplay')}</option>
+              <option value="pause">{t('waitingBehaviorPause')}</option>
             </select>
           </label>
 
@@ -2609,14 +3324,10 @@ function HallPlaybackSettingsSection({
               type="checkbox"
               onChange={(event) => setFullscreenSlideshowShuffleAllCollections(event.target.checked)}
             />
-            <span>When fullscreen slideshow is enabled, randomly continue with media from all collections</span>
+            <span>{t('fullscreenShuffleAllCollections')}</span>
           </label>
 
-          <p className="settingsHint">
-            Fullscreen videos no longer share control with the Hall rotation timer. The Hall rotation interval only
-            affects non-fullscreen browsing, while the fullscreen interval and video-end behavior above affect the
-            fullscreen viewer.
-          </p>
+          <p className="settingsHint">{t('fullscreenHint')}</p>
 
           <div className="settingsActions">
             <button
@@ -2625,7 +3336,7 @@ function HallPlaybackSettingsSection({
               type="button"
               onClick={() => void handleSave()}
             >
-              {saving ? 'Saving...' : 'Save Hall Playback'}
+              {saving ? 'Saving...' : t('saveHallPlayback')}
             </button>
             <button
               className="ghostButton"
@@ -2641,7 +3352,7 @@ function HallPlaybackSettingsSection({
                 setFullscreenSlideshowShuffleAllCollections(config.fullscreenSlideshowShuffleAllCollections)
               }}
             >
-              Reset
+              {t('reset')}
             </button>
           </div>
         </div>
@@ -3664,6 +4375,13 @@ function FeaturedFullscreenOverlay({
   usePageScrollLock(true)
   const [isMuted, setIsMuted] = useState(muted)
   const { controlsVisible, controlVisibilityProps, holdControls, releaseControls } = useViewerControlsVisibility()
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  useResilientVideoPlayback(videoRef, {
+    enabled: mediaType === 'video',
+    recoverOnUnexpectedPause: true,
+    sourceKey: `${src}:${isMuted ? 'muted' : 'unmuted'}`,
+  })
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -3724,6 +4442,8 @@ function FeaturedFullscreenOverlay({
               loop
               muted={isMuted}
               playsInline
+              preload="metadata"
+              ref={videoRef}
               src={src}
             />
           ) : (
@@ -3760,8 +4480,16 @@ function HallFullscreenOverlay({
   const slideshowEnabled = slideshowOverride ?? viewerConfig.fullscreenSlideshowEnabled
   const slideshowIntervalSeconds = normalizeIntervalSeconds(viewerConfig.fullscreenSlideshowIntervalSeconds, 6)
   const videoWaitingBehavior = viewerConfig.fullscreenVideoWaitingBehavior
+  const videoCompletesBeforeAdvance = videoWaitingBehavior === 'complete'
   const [videoAdvanceReady, setVideoAdvanceReady] = useState(false)
   const [videoEndedBeforeAdvance, setVideoEndedBeforeAdvance] = useState(false)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  useResilientVideoPlayback(videoRef, {
+    enabled: mediaType === 'video',
+    recoverOnUnexpectedPause: true,
+    sourceKey: `${src}:${isMuted ? 'muted' : 'unmuted'}`,
+  })
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -3779,7 +4507,11 @@ function HallFullscreenOverlay({
       return
     }
 
-    if (mediaType === 'video' && viewerConfig.fullscreenVideoAdvanceOnEnded) {
+    if (
+      mediaType === 'video' &&
+      viewerConfig.fullscreenVideoAdvanceOnEnded &&
+      videoWaitingBehavior !== 'none'
+    ) {
       return
     }
 
@@ -3793,12 +4525,19 @@ function HallFullscreenOverlay({
     onNext,
     slideshowEnabled,
     src,
+    videoWaitingBehavior,
     viewerConfig.fullscreenVideoAdvanceOnEnded,
     slideshowIntervalSeconds,
   ])
 
   useEffect(() => {
-    if (!slideshowEnabled || mediaType !== 'video' || !viewerConfig.fullscreenVideoAdvanceOnEnded) {
+    if (
+      !slideshowEnabled ||
+      mediaType !== 'video' ||
+      !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+      videoWaitingBehavior === 'none' ||
+      videoCompletesBeforeAdvance
+    ) {
       setVideoAdvanceReady(false)
       setVideoEndedBeforeAdvance(false)
       return
@@ -3817,6 +4556,7 @@ function HallFullscreenOverlay({
     slideshowEnabled,
     slideshowIntervalSeconds,
     src,
+    videoCompletesBeforeAdvance,
     videoWaitingBehavior,
     viewerConfig.fullscreenVideoAdvanceOnEnded,
   ])
@@ -3910,11 +4650,19 @@ function HallFullscreenOverlay({
               loop={
                 !slideshowEnabled ||
                 !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+                videoWaitingBehavior === 'none' ||
                 (videoWaitingBehavior === 'replay' && !videoAdvanceReady)
               }
               muted={isMuted}
               onEnded={() => {
-                if (slideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded && videoAdvanceReady) {
+                if (
+                  slideshowEnabled &&
+                  viewerConfig.fullscreenVideoAdvanceOnEnded &&
+                  (
+                    (videoCompletesBeforeAdvance && mediaType === 'video') ||
+                    (videoWaitingBehavior !== 'none' && videoAdvanceReady)
+                  )
+                ) {
                   onNext()
                   return
                 }
@@ -3922,12 +4670,15 @@ function HallFullscreenOverlay({
                 if (
                   slideshowEnabled &&
                   viewerConfig.fullscreenVideoAdvanceOnEnded &&
+                  !videoCompletesBeforeAdvance &&
                   videoWaitingBehavior === 'pause'
                 ) {
                   setVideoEndedBeforeAdvance(true)
                 }
               }}
               playsInline
+              preload="metadata"
+              ref={videoRef}
               src={src}
             />
           ) : (
@@ -4137,6 +4888,7 @@ function CollectionDetailPage() {
                   asset={asset}
                   key={asset.path}
                   onOpen={() => setActiveViewerState({ collectionId: resolvedCollection.id, assetIndex: index })}
+                  paused={activeAsset !== null}
                   previewImageUrl={getPreviewImageUrl(asset, resolvedCollection.assets)}
                 />
               ))}
@@ -4206,12 +4958,22 @@ function AssetCard({
   asset,
   onOpen,
   previewImageUrl,
+  paused = false,
 }: {
   asset: GalleryAsset
   onOpen: () => void
   previewImageUrl: string | null
+  paused?: boolean
 }) {
   const assetUrl = toAssetUrl(asset.path)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  useResilientVideoPlayback(videoRef, {
+    enabled: asset.type === 'video' && !previewImageUrl,
+    paused,
+    recoverOnUnexpectedPause: true,
+    sourceKey: `${asset.path}:${paused ? 'paused' : 'playing'}`,
+  })
 
   return (
     <button className="assetCard" type="button" onClick={onOpen}>
@@ -4219,7 +4981,7 @@ function AssetCard({
         {previewImageUrl ? (
           <img alt={asset.name} src={previewImageUrl} />
         ) : (
-          <video autoPlay loop muted playsInline preload="metadata" src={assetUrl} />
+          <video autoPlay loop muted playsInline preload="metadata" ref={videoRef} src={assetUrl} />
         )}
         {asset.type === 'video' ? <span className="assetBadge">Video</span> : null}
       </div>
@@ -4321,6 +5083,7 @@ function FullscreenViewer({
   const [slideshowOverride, setSlideshowOverride] = useState<boolean | null>(null)
   const { controlsVisible, controlVisibilityProps, holdControls, releaseControls } = useViewerControlsVisibility()
   const viewerConfig = galleryState.config
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   const assetUrl = toAssetUrl(asset.path)
   const previewImageUrl = getPreviewImageUrl(asset, collection.assets)
@@ -4328,15 +5091,25 @@ function FullscreenViewer({
   const slideshowEnabled = slideshowOverride ?? viewerConfig.fullscreenSlideshowEnabled
   const slideshowIntervalSeconds = normalizeIntervalSeconds(viewerConfig.fullscreenSlideshowIntervalSeconds, 6)
   const videoWaitingBehavior = viewerConfig.fullscreenVideoWaitingBehavior
+  const videoCompletesBeforeAdvance = videoWaitingBehavior === 'complete'
   const [videoAdvanceReady, setVideoAdvanceReady] = useState(false)
   const [videoEndedBeforeAdvance, setVideoEndedBeforeAdvance] = useState(false)
+
+  useResilientVideoPlayback(videoRef, {
+    enabled: asset.type === 'video',
+    sourceKey: `${asset.path}:${isMuted ? 'muted' : 'unmuted'}`,
+  })
 
   useEffect(() => {
     if (!slideshowEnabled) {
       return
     }
 
-    if (asset.type === 'video' && viewerConfig.fullscreenVideoAdvanceOnEnded) {
+    if (
+      asset.type === 'video' &&
+      viewerConfig.fullscreenVideoAdvanceOnEnded &&
+      videoWaitingBehavior !== 'none'
+    ) {
       return
     }
 
@@ -4356,13 +5129,20 @@ function FullscreenViewer({
     onNext,
     onAutoAdvance,
     slideshowEnabled,
+    videoWaitingBehavior,
     viewerConfig.fullscreenVideoAdvanceOnEnded,
     viewerConfig.fullscreenSlideshowShuffleAllCollections,
     slideshowIntervalSeconds,
   ])
 
   useEffect(() => {
-    if (!slideshowEnabled || asset.type !== 'video' || !viewerConfig.fullscreenVideoAdvanceOnEnded) {
+    if (
+      !slideshowEnabled ||
+      asset.type !== 'video' ||
+      !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+      videoWaitingBehavior === 'none' ||
+      videoCompletesBeforeAdvance
+    ) {
       setVideoAdvanceReady(false)
       setVideoEndedBeforeAdvance(false)
       return
@@ -4381,6 +5161,7 @@ function FullscreenViewer({
     asset.type,
     slideshowEnabled,
     slideshowIntervalSeconds,
+    videoCompletesBeforeAdvance,
     videoWaitingBehavior,
     viewerConfig.fullscreenVideoAdvanceOnEnded,
   ])
@@ -4501,12 +5282,20 @@ function FullscreenViewer({
                 controls
                 key={asset.path}
                 loop={
-                  !slideshowEnabled ||
-                  !viewerConfig.fullscreenVideoAdvanceOnEnded ||
-                  (videoWaitingBehavior === 'replay' && !videoAdvanceReady)
-                }
+                !slideshowEnabled ||
+                !viewerConfig.fullscreenVideoAdvanceOnEnded ||
+                videoWaitingBehavior === 'none' ||
+                (videoWaitingBehavior === 'replay' && !videoAdvanceReady)
+              }
                 onEnded={() => {
-                  if (slideshowEnabled && viewerConfig.fullscreenVideoAdvanceOnEnded && videoAdvanceReady) {
+                  if (
+                    slideshowEnabled &&
+                    viewerConfig.fullscreenVideoAdvanceOnEnded &&
+                    (
+                      (videoCompletesBeforeAdvance && asset.type === 'video') ||
+                      (videoWaitingBehavior !== 'none' && videoAdvanceReady)
+                    )
+                  ) {
                     if (viewerConfig.fullscreenSlideshowShuffleAllCollections && onAutoAdvance) {
                       onAutoAdvance()
                       return
@@ -4519,6 +5308,7 @@ function FullscreenViewer({
                   if (
                     slideshowEnabled &&
                     viewerConfig.fullscreenVideoAdvanceOnEnded &&
+                    !videoCompletesBeforeAdvance &&
                     videoWaitingBehavior === 'pause'
                   ) {
                     setVideoEndedBeforeAdvance(true)
@@ -4527,6 +5317,8 @@ function FullscreenViewer({
                 muted={isMuted}
                 playsInline
                 poster={previewImageUrl ?? undefined}
+                preload="metadata"
+                ref={videoRef}
                 src={assetUrl}
               />
             )}

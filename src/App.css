@@ -40,7 +40,8 @@
 }
 
 .windowChromeBrand,
-.windowChromeControls {
+.windowChromeControls,
+.windowChromeDragArea {
   align-items: center;
   display: flex;
   pointer-events: auto;
@@ -48,6 +49,12 @@
 
 .windowChromeBrand {
   gap: 12px;
+  min-width: 0;
+}
+
+.windowChromeDragArea {
+  -webkit-app-region: drag;
+  min-height: calc(var(--window-chrome-height) - 12px);
   min-width: 0;
 }
 
@@ -208,7 +215,7 @@
 }
 
 .windowChromeImmersive .windowChromeBrand {
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
   backdrop-filter: blur(18px);
   background:
     linear-gradient(180deg, rgba(22, 34, 58, 0.38), rgba(8, 12, 22, 0.26)),
@@ -222,11 +229,14 @@
 }
 
 .windowChromeImmersive .windowChromeBrand {
-  display: none;
+  border-color: transparent;
+  box-shadow: none;
+  opacity: 0.01;
+  pointer-events: auto;
 }
 
 .windowChromeImmersive .windowChromeInner {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .windowChromeImmersive .windowChromeMark {
@@ -254,6 +264,10 @@
     0 10px 22px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   padding: 4px;
+}
+
+.windowChromeImmersive .windowChromeDragArea {
+  min-height: 42px;
 }
 
 .windowChromeImmersive .windowChromeControl {
@@ -1434,7 +1448,7 @@
 }
 
 .hallBackdropLeaving {
-  animation: hallBackdropFadeOut 420ms cubic-bezier(0.22, 0.88, 0.22, 1) both;
+  animation: hallBackdropFadeOut 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
   z-index: -1;
 }
 
@@ -1511,6 +1525,7 @@
 }
 
 .hallStageHeader {
+  -webkit-app-region: drag;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
@@ -1527,6 +1542,7 @@
 }
 
 .hallViewport {
+  -webkit-app-region: drag;
   align-items: center;
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) 72px;
@@ -1536,10 +1552,24 @@
 }
 
 .hallStageOrbit {
+  -webkit-app-region: drag;
   align-items: center;
   display: grid;
   min-height: 620px;
   position: relative;
+}
+
+.hallFlatCarousel {
+  -webkit-app-region: drag;
+}
+
+.hallViewport > .viewerNav,
+.hallViewport [data-hall-action],
+.hallViewport .hallHeroCard,
+.hallViewport .hallSideCard,
+.hallViewport .hallFlatHeroCard,
+.hallViewport .hallFlatSideCard {
+  -webkit-app-region: no-drag;
 }
 
 .hallOrbitTrack {
@@ -1640,25 +1670,25 @@
 }
 
 .hallHeroCardAnimated {
-  --hall-enter-from-x: 26px;
+  --hall-enter-from-x: 56px;
   --hall-enter-from-rotate: 0deg;
-  --hall-enter-from-scale: 0.985;
+  --hall-enter-from-scale: 1;
   transition:
-    transform 220ms cubic-bezier(0.22, 0.88, 0.22, 1),
-    opacity 220ms cubic-bezier(0.22, 0.88, 0.22, 1),
-    filter 220ms cubic-bezier(0.22, 0.88, 0.22, 1);
+    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hallHeroCardAnimated.hallTransitionFromDrag.hallTransitionForward {
-  --hall-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * 18px + 6px);
-  --hall-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * -4deg);
-  --hall-enter-from-scale: calc(0.988 + (var(--hall-release-progress-abs) * 0.008));
+  --hall-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * 34px + 10px);
+  --hall-enter-from-rotate: 0deg;
+  --hall-enter-from-scale: 1;
 }
 
 .hallHeroCardAnimated.hallTransitionFromDrag.hallTransitionBackward {
-  --hall-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * -18px - 6px);
-  --hall-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * 4deg);
-  --hall-enter-from-scale: calc(0.988 + (var(--hall-release-progress-abs) * 0.008));
+  --hall-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * -34px - 10px);
+  --hall-enter-from-rotate: 0deg;
+  --hall-enter-from-scale: 1;
 }
 
 .hallStageOrbit.hallIsDragging .hallSideCard,
@@ -1693,26 +1723,26 @@
 }
 
 .hallHeroCardLeaving.hallTransitionFromDrag {
-  --hall-leave-from-x: calc(var(--hall-release-progress) * 76px);
-  --hall-leave-from-rotate: calc(var(--hall-release-progress) * -10deg);
-  --hall-leave-from-scale: calc(1 - (var(--hall-release-progress-abs) * 0.035));
-  --hall-leave-from-saturate: calc(1 - (var(--hall-release-progress-abs) * 0.08));
+  --hall-leave-from-x: calc(var(--hall-release-progress) * 48px);
+  --hall-leave-from-rotate: 0deg;
+  --hall-leave-from-scale: 1;
+  --hall-leave-from-saturate: 1;
 }
 
 .hallHeroCardAnimated.hallTransitionForward {
-  animation: hallHeroSwapForward 300ms cubic-bezier(0.22, 0.9, 0.22, 1) both;
+  animation: hallHeroSwapForward 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .hallHeroCardAnimated.hallTransitionBackward {
-  animation: hallHeroSwapBackward 300ms cubic-bezier(0.22, 0.9, 0.22, 1) both;
+  animation: hallHeroSwapBackward 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .hallHeroCardLeaving.hallTransitionForward {
-  animation: hallHeroLeaveForward 320ms cubic-bezier(0.22, 0.88, 0.22, 1) both;
+  animation: hallHeroLeaveForward 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .hallHeroCardLeaving.hallTransitionBackward {
-  animation: hallHeroLeaveBackward 320ms cubic-bezier(0.22, 0.88, 0.22, 1) both;
+  animation: hallHeroLeaveBackward 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes hallHeroSwapForward {
@@ -1720,9 +1750,9 @@
     opacity: 0;
     transform:
       translate3d(var(--hall-enter-from-x), 0, 0)
-      rotateY(var(--hall-enter-from-rotate))
-      scale(var(--hall-enter-from-scale));
-    filter: saturate(0.92);
+      rotateY(0deg)
+      scale(1);
+    filter: saturate(0.98);
   }
   to {
     opacity: 1;
@@ -1736,9 +1766,9 @@
     opacity: 0;
     transform:
       translate3d(var(--hall-enter-from-x), 0, 0)
-      rotateY(var(--hall-enter-from-rotate))
-      scale(var(--hall-enter-from-scale));
-    filter: saturate(0.92);
+      rotateY(0deg)
+      scale(1);
+    filter: saturate(0.98);
   }
   to {
     opacity: 1;
@@ -1752,14 +1782,14 @@
     opacity: 1;
     transform:
       translate3d(var(--hall-leave-from-x), 0, 0)
-      rotateY(var(--hall-leave-from-rotate))
-      scale(var(--hall-leave-from-scale));
+      rotateY(0deg)
+      scale(1);
     filter: saturate(var(--hall-leave-from-saturate));
   }
   to {
     opacity: 0;
-    transform: translate3d(-38px, 0, 0) rotateY(8deg) scale(0.978);
-    filter: saturate(0.92);
+    transform: translate3d(-56px, 0, 0) rotateY(0deg) scale(1);
+    filter: saturate(0.98);
   }
 }
 
@@ -1768,14 +1798,55 @@
     opacity: 1;
     transform:
       translate3d(var(--hall-leave-from-x), 0, 0)
-      rotateY(var(--hall-leave-from-rotate))
-      scale(var(--hall-leave-from-scale));
+      rotateY(0deg)
+      scale(1);
     filter: saturate(var(--hall-leave-from-saturate));
   }
   to {
     opacity: 0;
-    transform: translate3d(38px, 0, 0) rotateY(-8deg) scale(0.978);
-    filter: saturate(0.92);
+    transform: translate3d(56px, 0, 0) rotateY(0deg) scale(1);
+    filter: saturate(0.98);
+  }
+}
+
+.hallHeroCardAnimated .hallHeroFrame,
+.hallHeroCardAnimated .hallHeroMeta {
+  will-change: transform, opacity, filter;
+}
+
+.hallHeroCardAnimated.hallTransitionForward .hallHeroFrame,
+.hallHeroCardAnimated.hallTransitionBackward .hallHeroFrame {
+  animation: hallHeroFrameIn 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hallHeroCardAnimated.hallTransitionForward .hallHeroMeta,
+.hallHeroCardAnimated.hallTransitionBackward .hallHeroMeta {
+  animation: hallHeroMetaIn 360ms 50ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hallHeroFrameIn {
+  from {
+    opacity: 0.82;
+    transform: translateX(calc(var(--hall-enter-from-x) * 0.18));
+    filter: saturate(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: saturate(1);
+  }
+}
+
+@keyframes hallHeroMetaIn {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--hall-enter-from-x) * 0.14));
+    filter: none;
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: none;
   }
 }
 
@@ -1786,7 +1857,6 @@
 }
 
 .hallHeroArtwork {
-  --hall-blur: 0px;
   border-radius: 24px;
 }
 
@@ -1808,14 +1878,28 @@
   backface-visibility: hidden;
   border-radius: inherit;
   display: block;
-  filter: blur(var(--hall-blur));
   height: calc(100% + 6px);
   inset: -4px;
   object-fit: cover;
   position: absolute;
   transform: translateZ(0);
-  transition: filter 240ms ease, transform 240ms ease;
+  transition: transform 240ms ease;
   width: calc(100% + 6px);
+}
+
+.hallMediaPoster {
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+  z-index: 1;
+}
+
+.hallMediaPosterHidden {
+  opacity: 0;
+}
+
+.hallMediaVideoPending {
+  opacity: 0;
 }
 
 .hallCardMeta {
@@ -2693,7 +2777,7 @@
     box-shadow: none;
     display: grid;
     gap: 0;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100%;
     min-height: 0;
     overflow: hidden;
@@ -2706,6 +2790,7 @@
   }
 
   .hallViewport {
+    -webkit-app-region: no-drag;
     align-items: stretch;
     display: grid;
     grid-template-columns: 1fr;
@@ -2716,20 +2801,26 @@
     touch-action: none;
   }
 
+  .hallStageHeader,
+  .hallStageOrbit,
+  .hallFlatCarousel {
+    -webkit-app-region: no-drag;
+  }
+/* hall竖屏顶部拖动框 */
   .hallPortraitOverlay {
+    -webkit-app-region: drag;
     display: flex;
     justify-content: space-between;
-    left: 0;
-    padding: 12px 12px 0;
-    pointer-events: none;
-    position: absolute;
-    right: 0;
-    top: 0;
+    margin-bottom: -25px;
+    padding: 0 12px 0;
+    pointer-events: auto;
+    position: relative;
     z-index: 50;
   }
 
   .hallPortraitDragHandle {
-    -webkit-app-region: drag;
+    align-self: stretch;
+    display: block;
     flex: 1;
     min-height: 48px;
     pointer-events: auto;
@@ -2752,7 +2843,7 @@
     color: #eef4ff;
     cursor: pointer;
     display: inline-flex;
-    height: 48px;
+    height: 40px;
     justify-content: center;
     pointer-events: auto;
     position: relative;
@@ -2761,7 +2852,7 @@
       border-color 160ms ease,
       box-shadow 160ms ease,
       background-color 160ms ease;
-    width: 48px;
+    width: 40px;
   }
 
   .hallPortraitBackButton::before {
@@ -2810,6 +2901,7 @@
     justify-items: end;
     pointer-events: auto;
     position: relative;
+    z-index: 60;
   }
 
   .hallPortraitControls {
@@ -2932,6 +3024,9 @@
     min-width: 184px;
     overflow: hidden;
     padding: 8px;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
     transform-origin: top right;
   }
 
@@ -3107,10 +3202,9 @@
   }
 
   .hallFlatHeroCard {
-    --hall-flat-enter-from-x: 28px;
+    --hall-flat-enter-from-x: 56px;
     --hall-flat-enter-from-rotate: 0deg;
-    --hall-flat-enter-from-scale: 0.97;
-    --hall-blur: 0px;
+    --hall-flat-enter-from-scale: 1;
     backdrop-filter: blur(10px);
     border-radius: 30px;
     box-shadow:
@@ -3156,38 +3250,38 @@
   }
 
   .hallFlatHeroCard.hallTransitionFromDrag.hallTransitionForward {
-    --hall-flat-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * 18px + 8px);
-    --hall-flat-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * -5deg);
-    --hall-flat-enter-from-scale: calc(0.982 + (var(--hall-release-progress-abs) * 0.012));
+    --hall-flat-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * 34px + 10px);
+    --hall-flat-enter-from-rotate: 0deg;
+    --hall-flat-enter-from-scale: 1;
   }
 
   .hallFlatHeroCard.hallTransitionFromDrag.hallTransitionBackward {
-    --hall-flat-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * -18px - 8px);
-    --hall-flat-enter-from-rotate: calc((1 - var(--hall-release-progress-abs)) * 5deg);
-    --hall-flat-enter-from-scale: calc(0.982 + (var(--hall-release-progress-abs) * 0.012));
+    --hall-flat-enter-from-x: calc((1 - var(--hall-release-progress-abs)) * -34px - 10px);
+    --hall-flat-enter-from-rotate: 0deg;
+    --hall-flat-enter-from-scale: 1;
   }
 
   .hallFlatHeroCardLeaving.hallTransitionFromDrag {
-    --hall-flat-leave-from-x: calc(var(--hall-release-progress) * 96px);
-    --hall-flat-leave-from-rotate: calc(var(--hall-release-progress) * -10deg);
-    --hall-flat-leave-from-scale: calc(1 - (var(--hall-release-progress-abs) * 0.04));
-    --hall-flat-leave-from-saturate: calc(1 - (var(--hall-release-progress-abs) * 0.08));
+    --hall-flat-leave-from-x: calc(var(--hall-release-progress) * 56px);
+    --hall-flat-leave-from-rotate: 0deg;
+    --hall-flat-leave-from-scale: 1;
+    --hall-flat-leave-from-saturate: 1;
   }
 
   .hallFlatHeroCard.hallTransitionForward {
-    animation: hallFlatHeroForward 320ms cubic-bezier(0.2, 0.88, 0.2, 1) both;
+    animation: hallFlatHeroForward 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .hallFlatHeroCard.hallTransitionBackward {
-    animation: hallFlatHeroBackward 320ms cubic-bezier(0.2, 0.88, 0.2, 1) both;
+    animation: hallFlatHeroBackward 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .hallFlatHeroCardLeaving.hallTransitionForward {
-    animation: hallFlatHeroLeaveForward 320ms cubic-bezier(0.2, 0.88, 0.2, 1) both;
+    animation: hallFlatHeroLeaveForward 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .hallFlatHeroCardLeaving.hallTransitionBackward {
-    animation: hallFlatHeroLeaveBackward 320ms cubic-bezier(0.2, 0.88, 0.2, 1) both;
+    animation: hallFlatHeroLeaveBackward 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .hallFlatSideCard {
@@ -3199,9 +3293,9 @@
       opacity: 0;
       transform:
         translateX(var(--hall-flat-enter-from-x))
-        rotateY(var(--hall-flat-enter-from-rotate))
-        scale(var(--hall-flat-enter-from-scale));
-      filter: saturate(0.92);
+        rotateY(0deg)
+        scale(1);
+      filter: saturate(0.98);
     }
     to {
       opacity: 1;
@@ -3215,9 +3309,9 @@
       opacity: 0;
       transform:
         translateX(var(--hall-flat-enter-from-x))
-        rotateY(var(--hall-flat-enter-from-rotate))
-        scale(var(--hall-flat-enter-from-scale));
-      filter: saturate(0.92);
+        rotateY(0deg)
+        scale(1);
+      filter: saturate(0.98);
     }
     to {
       opacity: 1;
@@ -3232,14 +3326,14 @@
       transform:
         translate(-50%, -50%)
         translateX(var(--hall-flat-leave-from-x))
-        rotateY(var(--hall-flat-leave-from-rotate))
-        scale(var(--hall-flat-leave-from-scale));
+        rotateY(0deg)
+        scale(1);
       filter: saturate(var(--hall-flat-leave-from-saturate));
     }
     to {
       opacity: 0;
-      transform: translate(-50%, -50%) translateX(-40px) rotateY(8deg) scale(0.976);
-      filter: saturate(0.9);
+      transform: translate(-50%, -50%) translateX(-56px) rotateY(0deg) scale(1);
+      filter: saturate(0.98);
     }
   }
 
@@ -3249,25 +3343,23 @@
       transform:
         translate(-50%, -50%)
         translateX(var(--hall-flat-leave-from-x))
-        rotateY(var(--hall-flat-leave-from-rotate))
-        scale(var(--hall-flat-leave-from-scale));
+        rotateY(0deg)
+        scale(1);
       filter: saturate(var(--hall-flat-leave-from-saturate));
     }
     to {
       opacity: 0;
-      transform: translate(-50%, -50%) translateX(40px) rotateY(-8deg) scale(0.976);
-      filter: saturate(0.9);
+      transform: translate(-50%, -50%) translateX(56px) rotateY(0deg) scale(1);
+      filter: saturate(0.98);
     }
   }
 
   @keyframes hallFlatSideFade {
     from {
       opacity: 0;
-      filter: blur(2px);
     }
     to {
       opacity: 0.44;
-      filter: blur(0);
     }
   }
 
@@ -3308,9 +3400,32 @@
     text-align: center;
   }
 
+  .hallFlatHeroCard .hallFlatHeroFrame,
+  .hallFlatHeroCard .hallFlatHeroMeta {
+    will-change: transform, opacity, filter;
+  }
+
+  .hallFlatHeroCard.hallTransitionForward .hallFlatHeroFrame,
+  .hallFlatHeroCard.hallTransitionBackward .hallFlatHeroFrame {
+    animation: hallFlatFrameIn 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   .hallFlatHeroCard.hallTransitionForward .hallFlatHeroMeta,
   .hallFlatHeroCard.hallTransitionBackward .hallFlatHeroMeta {
-    animation: hallFlatMetaIn 280ms 40ms cubic-bezier(0.2, 0.88, 0.2, 1) both;
+    animation: hallFlatMetaIn 340ms 50ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes hallFlatFrameIn {
+    from {
+      opacity: 0.82;
+      transform: translateX(calc(var(--hall-flat-enter-from-x) * 0.18));
+      filter: saturate(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+      filter: saturate(1);
+    }
   }
 
   .hallFlatCode {
@@ -3416,17 +3531,25 @@
     gap: 10px;
     grid-auto-columns: 54px;
     grid-auto-flow: column;
-    justify-content: center;
+    justify-content: start;
     margin: 0 auto;
     max-width: min(78vw, 420px);
+    overscroll-behavior-x: contain;
     overflow-x: auto;
     padding: 10px 12px;
     scrollbar-width: none;
+    touch-action: pan-x;
+    user-select: none;
     width: min(78vw, 420px);
+    cursor: grab;
   }
 
   .hallEntryRail::-webkit-scrollbar {
     display: none;
+  }
+
+  .hallEntryRailDragging {
+    cursor: grabbing;
   }
 
   .hallEntryThumb {
@@ -3462,6 +3585,9 @@
     display: block;
     height: 100%;
     object-fit: cover;
+    pointer-events: none;
+    user-select: none;
     width: 100%;
+    -webkit-user-drag: none;
   }
 }
